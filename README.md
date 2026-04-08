@@ -1,6 +1,6 @@
-# RawFileReader Python Adapter
+# TraceHunter
 
-A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReader](https://github.com/thermofisherlsms/RawFileReader) .NET assemblies.  It uses [pythonnet](https://github.com/pythonnet/pythonnet) to bridge Python and .NET so you can read Thermo `.raw` mass-spectrometry files without leaving Python.
+A comprehensive Python adapter for the [Thermo Fisher Scientific RawFileReader](https://github.com/thermofisherlsms/RawFileReader) .NET assemblies.  It uses [pythonnet](https://github.com/pythonnet/pythonnet) to bridge Python and .NET so you can read Thermo `.raw` mass-spectrometry files without leaving Python.
 
 ---
 
@@ -86,18 +86,18 @@ export RAWFILEREADER_LIBS=/path/to/libs
 ## Quick Start
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    info = rf.get_file_info()
+with TraceHunter("sample.raw") as th:
+    info = th.get_file_info()
     print(f"Instrument : {info.instrument_name}")
     print(f"Operator   : {info.operator}")
 
-    first, last = rf.get_scan_range()
+    first, last = th.get_scan_range()
     print(f"Scans      : {first} – {last}")
 
     # Read first scan as centroid data
-    centroid = rf.get_centroid_stream(first)
+    centroid = th.get_centroid_stream(first)
     for mass, intensity in centroid.peaks[:5]:
         print(f"  m/z={mass:.4f}  I={intensity:.0f}")
 ```
@@ -108,7 +108,7 @@ with RawFileAdapter("sample.raw") as rf:
 
 ### Opening and Closing Files
 
-#### `RawFileAdapter(raw_file_path, libs_dir=None, instrument_type="MS", instrument_instance=1)`
+#### `TraceHunter(raw_file_path, libs_dir=None, instrument_type="MS", instrument_instance=1)`
 
 Create a new adapter instance.
 
@@ -121,24 +121,24 @@ Create a new adapter instance.
 
 ```python
 # Explicit open/close
-rf = RawFileAdapter("sample.raw")
-rf.open()
+th = TraceHunter("sample.raw")
+th.open()
 # ... work ...
-rf.close()
+th.close()
 
 # Preferred: context manager
-with RawFileAdapter("sample.raw") as rf:
+with TraceHunter("sample.raw") as th:
     pass
 ```
 
 #### `open()` / `close()` / `is_open() -> bool`
 
 ```python
-rf = RawFileAdapter("sample.raw")
-rf.open()
-print(rf.is_open())   # True
-rf.close()
-print(rf.is_open())   # False
+th = TraceHunter("sample.raw")
+th.open()
+print(th.is_open())   # True
+th.close()
+print(th.is_open())   # False
 ```
 
 ---
@@ -150,36 +150,36 @@ print(rf.is_open())   # False
 Select a specific device for subsequent reads.
 
 ```python
-with RawFileAdapter("sample.raw") as rf:
-    rf.select_instrument("UV", 1)   # switch to UV detector
-    rf.select_instrument("MS", 1)   # switch back to MS
+with TraceHunter("sample.raw") as th:
+    th.select_instrument("UV", 1)   # switch to UV detector
+    th.select_instrument("MS", 1)   # switch back to MS
 ```
 
 #### `get_instrument_count() -> int`
 
 ```python
-count = rf.get_instrument_count()
+count = th.get_instrument_count()
 print(f"Total devices: {count}")
 ```
 
 #### `get_instrument_count_of_type(device_type) -> int`
 
 ```python
-ms_count = rf.get_instrument_count_of_type("MS")
-uv_count = rf.get_instrument_count_of_type("UV")
+ms_count = th.get_instrument_count_of_type("MS")
+uv_count = th.get_instrument_count_of_type("UV")
 ```
 
 #### `get_instrument_type(index) -> str`
 
 ```python
-for i in range(rf.get_instrument_count()):
-    print(f"  Device {i}: {rf.get_instrument_type(i)}")
+for i in range(th.get_instrument_count()):
+    print(f"  Device {i}: {th.get_instrument_type(i)}")
 ```
 
 #### `get_instrument_data() -> InstrumentInfo`
 
 ```python
-info = rf.get_instrument_data()
+info = th.get_instrument_data()
 print(info.name, info.model, info.serial_number)
 ```
 
@@ -190,7 +190,7 @@ print(info.name, info.model, info.serial_number)
 #### `get_file_info() -> FileInfo`
 
 ```python
-fi = rf.get_file_info()
+fi = th.get_file_info()
 print(fi.file_name)
 print(fi.creation_date)
 print(fi.operator)
@@ -203,14 +203,14 @@ print(fi.instrument_serial_number)
 #### `get_instrument_method(index=0) -> str`
 
 ```python
-method_text = rf.get_instrument_method(0)
+method_text = th.get_instrument_method(0)
 print(method_text[:200])
 ```
 
 #### `get_all_instrument_names_from_method() -> List[str]`
 
 ```python
-names = rf.get_all_instrument_names_from_method()
+names = th.get_all_instrument_names_from_method()
 for name in names:
     print(name)
 ```
@@ -222,27 +222,27 @@ for name in names:
 #### `get_scan_range() -> Tuple[int, int]`
 
 ```python
-first, last = rf.get_scan_range()
+first, last = th.get_scan_range()
 print(f"Scans: {first} to {last}")
 ```
 
 #### `get_start_time() -> float` / `get_end_time() -> float`
 
 ```python
-print(f"Run time: {rf.get_start_time():.2f} – {rf.get_end_time():.2f} min")
+print(f"Run time: {th.get_start_time():.2f} – {th.get_end_time():.2f} min")
 ```
 
 #### `get_retention_time(scan_number) -> float`
 
 ```python
-rt = rf.get_retention_time(100)
+rt = th.get_retention_time(100)
 print(f"Scan 100 @ {rt:.3f} min")
 ```
 
 #### `scan_number_from_retention_time(retention_time) -> int`
 
 ```python
-scan = rf.scan_number_from_retention_time(5.0)
+scan = th.scan_number_from_retention_time(5.0)
 print(f"Closest scan to 5.0 min: {scan}")
 ```
 
@@ -253,7 +253,7 @@ print(f"Closest scan to 5.0 min: {scan}")
 #### `get_filters() -> List[str]`
 
 ```python
-for filt in rf.get_filters():
+for filt in th.get_filters():
     print(filt)
 # e.g. "FTMS + p NSI Full ms [200.00-2000.00]"
 ```
@@ -261,14 +261,14 @@ for filt in rf.get_filters():
 #### `get_filter_for_scan(scan_number) -> str`
 
 ```python
-filt = rf.get_filter_for_scan(1)
+filt = th.get_filter_for_scan(1)
 print(filt)
 ```
 
 #### `get_scan_event_for_scan(scan_number) -> dict`
 
 ```python
-ev = rf.get_scan_event_for_scan(1)
+ev = th.get_scan_event_for_scan(1)
 print(ev["MSOrder"])   # 1
 print(ev["Polarity"])  # "Positive"
 print(ev["Detector"])  # "FTMS"
@@ -281,7 +281,7 @@ print(ev["Detector"])  # "FTMS"
 #### `get_scan_stats(scan_number) -> ScanStats`
 
 ```python
-stats = rf.get_scan_stats(1)
+stats = th.get_scan_stats(1)
 print(f"TIC         : {stats.tic:.2e}")
 print(f"Base peak   : m/z={stats.base_peak_mass:.4f}  I={stats.base_peak_intensity:.2e}")
 print(f"Mass range  : {stats.low_mass:.1f}–{stats.high_mass:.1f}")
@@ -296,7 +296,7 @@ print(f"Is centroid : {stats.is_centroid_scan}")
 #### `get_centroid_stream(scan_number, prefer_profile_data=False) -> CentroidData`
 
 ```python
-centroid = rf.get_centroid_stream(1)
+centroid = th.get_centroid_stream(1)
 print(f"Peaks: {len(centroid.masses)}")
 
 # Iterate (mass, intensity) pairs
@@ -317,7 +317,7 @@ for m, i, n, r in zip(centroid.masses, centroid.intensities,
 #### `get_profile_data(scan_number) -> ProfileData`
 
 ```python
-profile = rf.get_profile_data(1)
+profile = th.get_profile_data(1)
 
 # Access flattened arrays
 masses = profile.masses
@@ -337,7 +337,7 @@ for pos, inten in profile.segments:
 Combines filter, event, stats, and trailer-extra into a single object.
 
 ```python
-info = rf.get_scan_info(500)
+info = th.get_scan_info(500)
 print(f"MS order        : {info.ms_order}")
 print(f"RT              : {info.retention_time:.3f} min")
 print(f"Filter          : {info.scan_filter}")
@@ -359,7 +359,7 @@ if info.ms_order >= 2:
 #### `average_scans_in_range(first_scan, last_scan, filter_string=None) -> AveragedScan`
 
 ```python
-avg = rf.average_scans_in_range(1, 50)
+avg = th.average_scans_in_range(1, 50)
 print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 ```
 
@@ -368,7 +368,7 @@ print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 ```python
 # Average specific scans (e.g. all MS1 scans at a given retention time)
 scan_list = [10, 20, 30, 40, 50]
-avg = rf.average_scans(scan_list)
+avg = th.average_scans(scan_list)
 ```
 
 ---
@@ -379,21 +379,21 @@ avg = rf.average_scans(scan_list)
 
 ```python
 # Total ion chromatogram (TIC)
-tic = rf.get_chromatogram(trace_type="TIC")
+tic = th.get_chromatogram(trace_type="TIC")
 for t, i in zip(tic.times, tic.intensities):
     print(f"  {t:.3f} min  {i:.2e}")
 
 # Base peak chromatogram
-bpc = rf.get_chromatogram(trace_type="BasePeak")
+bpc = th.get_chromatogram(trace_type="BasePeak")
 
 # Extracted ion chromatogram (EIC) for a mass range
-eic = rf.get_chromatogram(
+eic = th.get_chromatogram(
     trace_type="MassRange",
     mass_range="524.27-524.29",
 )
 
 # Restrict to a scan range
-partial = rf.get_chromatogram(
+partial = th.get_chromatogram(
     trace_type="TIC",
     start_scan=100,
     end_scan=500,
@@ -407,7 +407,7 @@ partial = rf.get_chromatogram(
 #### `get_trailer_data(scan_number) -> TrailerData`
 
 ```python
-trailer = rf.get_trailer_data(1)
+trailer = th.get_trailer_data(1)
 for label, value in trailer.fields.items():
     print(f"  {label}: {value}")
 
@@ -421,7 +421,7 @@ print(trailer.fields.get("AGC:"))
 #### `get_trailer_header_info() -> List[str]`
 
 ```python
-labels = rf.get_trailer_header_info()
+labels = th.get_trailer_header_info()
 print(labels)
 ```
 
@@ -432,13 +432,13 @@ print(labels)
 #### `get_status_log_header_info() -> List[str]`
 
 ```python
-log_labels = rf.get_status_log_header_info()
+log_labels = th.get_status_log_header_info()
 ```
 
 #### `get_status_log_for_retention_time(retention_time) -> StatusLogEntry`
 
 ```python
-entry = rf.get_status_log_for_retention_time(5.0)
+entry = th.get_status_log_for_retention_time(5.0)
 for label, value in entry.fields.items():
     print(f"  {label}: {value}")
 ```
@@ -446,7 +446,7 @@ for label, value in entry.fields.items():
 #### `get_status_log_for_scan(scan_number) -> StatusLogEntry`
 
 ```python
-entry = rf.get_status_log_for_scan(200)
+entry = th.get_status_log_for_scan(200)
 ```
 
 ---
@@ -456,7 +456,7 @@ entry = rf.get_status_log_for_scan(200)
 #### `get_scan_dependents(scan_number, depth=1) -> ScanDependent`
 
 ```python
-dep = rf.get_scan_dependents(scan_number=10, depth=1)
+dep = th.get_scan_dependents(scan_number=10, depth=1)
 print(f"Scan {dep.scan_number} triggered: {dep.dependent_scan_numbers}")
 ```
 
@@ -469,7 +469,7 @@ print(f"Scan {dep.scan_number} triggered: {dep.dependent_scan_numbers}")
 Works on Orbitrap / FTMS scans only.
 
 ```python
-estimates = rf.get_mass_precision(1)
+estimates = th.get_mass_precision(1)
 for e in estimates[:10]:
     print(
         f"  m/z={e.mass:.5f}  "
@@ -487,7 +487,7 @@ for e in estimates[:10]:
 
 ```python
 # All MS2 scan metadata
-for info in rf.iter_scan_info(ms_order=2):
+for info in th.iter_scan_info(ms_order=2):
     print(f"Scan {info.scan_number}  precursor={info.precursor_mass}")
 ```
 
@@ -495,7 +495,7 @@ for info in rf.iter_scan_info(ms_order=2):
 
 ```python
 # Collect all MS1 centroids
-ms1_spectra = list(rf.iter_centroid_data(ms_order=1))
+ms1_spectra = list(th.iter_centroid_data(ms_order=1))
 ```
 
 ---
@@ -507,7 +507,7 @@ ms1_spectra = list(rf.iter_centroid_data(ms_order=1))
 Walks every scan and checks for out-of-order masses (data integrity check).
 
 ```python
-summary = rf.analyze_all_scans()
+summary = th.analyze_all_scans()
 print(f"Total scans       : {summary['total']}")
 print(f"Centroid scans    : {summary['centroid']}")
 print(f"Profile scans     : {summary['profile']}")
@@ -549,10 +549,10 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `AssemblyLoadError` | DLLs not found or pythonnet not installed |
 
 ```python
-from rawfilereader.exceptions import ScanNotFoundError, RawFileNotOpenError
+from tracehunter.exceptions import ScanNotFoundError, RawFileNotOpenError
 
 try:
-    centroid = rf.get_centroid_stream(99999)
+    centroid = th.get_centroid_stream(99999)
 except ScanNotFoundError as e:
     print(f"Bad scan: {e}")
 ```
@@ -577,11 +577,11 @@ python my_script.py
 ### Example 1 – Print file summary
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    fi = rf.get_file_info()
-    first, last = rf.get_scan_range()
+with TraceHunter("sample.raw") as th:
+    fi = th.get_file_info()
+    first, last = th.get_scan_range()
 
     print(f"File    : {fi.file_name}")
     print(f"Date    : {fi.creation_date}")
@@ -589,18 +589,18 @@ with RawFileAdapter("sample.raw") as rf:
     print(f"Sample  : {fi.sample_name}")
     print(f"Instrument: {fi.instrument_name} ({fi.instrument_serial_number})")
     print(f"Scans   : {first}–{last}")
-    print(f"RT range: {rf.get_start_time():.2f}–{rf.get_end_time():.2f} min")
+    print(f"RT range: {th.get_start_time():.2f}–{th.get_end_time():.2f} min")
 ```
 
 ### Example 2 – Extract all MS1 spectra to a list of dicts
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
 results = []
-with RawFileAdapter("sample.raw") as rf:
-    for info in rf.iter_scan_info(ms_order=1):
-        centroid = rf.get_centroid_stream(info.scan_number)
+with TraceHunter("sample.raw") as th:
+    for info in th.iter_scan_info(ms_order=1):
+        centroid = th.get_centroid_stream(info.scan_number)
         results.append({
             "scan": info.scan_number,
             "rt": info.retention_time,
@@ -614,10 +614,10 @@ print(f"Collected {len(results)} MS1 scans")
 
 ```python
 import csv
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    tic = rf.get_chromatogram(trace_type="TIC")
+with TraceHunter("sample.raw") as th:
+    tic = th.get_chromatogram(trace_type="TIC")
 
 with open("tic.csv", "w", newline="") as f:
     writer = csv.writer(f)
@@ -630,10 +630,10 @@ print("TIC exported to tic.csv")
 ### Example 4 – Dump MS2 scan info with precursor details
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    for info in rf.iter_scan_info(ms_order=2):
+with TraceHunter("sample.raw") as th:
+    for info in th.iter_scan_info(ms_order=2):
         print(
             f"Scan {info.scan_number:5d} "
             f"RT={info.retention_time:.3f} min  "
@@ -646,14 +646,14 @@ with RawFileAdapter("sample.raw") as rf:
 ### Example 5 – Average MS1 scans in a retention-time window
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
+with TraceHunter("sample.raw") as th:
     t_start, t_end = 5.0, 5.5   # minutes
-    s_start = rf.scan_number_from_retention_time(t_start)
-    s_end   = rf.scan_number_from_retention_time(t_end)
+    s_start = th.scan_number_from_retention_time(t_start)
+    s_end   = th.scan_number_from_retention_time(t_end)
 
-    avg = rf.average_scans_in_range(s_start, s_end)
+    avg = th.average_scans_in_range(s_start, s_end)
     print(f"Averaged {avg.first_scan}–{avg.last_scan} ({len(avg.masses)} peaks)")
     for m, i in zip(avg.masses[:10], avg.intensities[:10]):
         print(f"  {m:.4f}  {i:.2e}")
@@ -662,16 +662,16 @@ with RawFileAdapter("sample.raw") as rf:
 ### Example 6 – Inspect trailer-extra and status log for a scan
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
+with TraceHunter("sample.raw") as th:
     scan = 42
-    trailer = rf.get_trailer_data(scan)
+    trailer = th.get_trailer_data(scan)
     print("Trailer extra:")
     for k, v in trailer.fields.items():
         print(f"  {k}: {v}")
 
-    log = rf.get_status_log_for_scan(scan)
+    log = th.get_status_log_for_scan(scan)
     print("\nStatus log @ RT={log.retention_time:.3f} min:")
     for k, v in log.fields.items():
         print(f"  {k}: {v}")
@@ -680,10 +680,10 @@ with RawFileAdapter("sample.raw") as rf:
 ### Example 7 – Mass precision for an Orbitrap scan
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    estimates = rf.get_mass_precision(1)
+with TraceHunter("sample.raw") as th:
+    estimates = th.get_mass_precision(1)
     print(f"{'m/z':>12}  {'ppm':>8}  {'mmu':>8}  {'Resolution':>12}")
     for e in estimates[:20]:
         print(f"{e.mass:12.5f}  {e.mz_accuracy_mass:8.3f}  "
@@ -693,34 +693,34 @@ with RawFileAdapter("sample.raw") as rf:
 ### Example 8 – List all instruments and their types
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    n = rf.get_instrument_count()
+with TraceHunter("sample.raw") as th:
+    n = th.get_instrument_count()
     print(f"Found {n} instrument device(s):")
     for i in range(n):
-        dtype = rf.get_instrument_type(i)
+        dtype = th.get_instrument_type(i)
         print(f"  [{i}] {dtype}")
 
     # Try selecting each MS device
-    ms_count = rf.get_instrument_count_of_type("MS")
+    ms_count = th.get_instrument_count_of_type("MS")
     for instance in range(1, ms_count + 1):
-        rf.select_instrument("MS", instance)
-        idata = rf.get_instrument_data()
+        th.select_instrument("MS", instance)
+        idata = th.get_instrument_data()
         print(f"MS instance {instance}: {idata.name} ({idata.serial_number})")
 ```
 
 ### Example 9 – Find MS^n scan tree
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    first, last = rf.get_scan_range()
+with TraceHunter("sample.raw") as th:
+    first, last = th.get_scan_range()
     for scan in range(first, min(first + 200, last + 1)):
-        info = rf.get_scan_info(scan)
+        info = th.get_scan_info(scan)
         if info.ms_order == 1:
-            deps = rf.get_scan_dependents(scan)
+            deps = th.get_scan_dependents(scan)
             if deps.dependent_scan_numbers:
                 print(f"MS1 scan {scan} -> MS2 scans: {deps.dependent_scan_numbers}")
 ```
@@ -728,10 +728,10 @@ with RawFileAdapter("sample.raw") as rf:
 ### Example 10 – Run data-integrity check
 
 ```python
-from rawfilereader import RawFileAdapter
+from tracehunter import TraceHunter
 
-with RawFileAdapter("sample.raw") as rf:
-    summary = rf.analyze_all_scans()
+with TraceHunter("sample.raw") as th:
+    summary = th.analyze_all_scans()
     print(f"Total          : {summary['total']}")
     print(f"Centroid scans : {summary['centroid']}")
     print(f"Profile scans  : {summary['profile']}")

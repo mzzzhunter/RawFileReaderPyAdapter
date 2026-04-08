@@ -1,5 +1,5 @@
 """
-Data models (plain Python dataclasses) returned by the RawFileAdapter.
+Data models (plain Python dataclasses) returned by TraceHunter.
 All values are converted from .NET types to native Python types here so
 callers never need to touch pythonnet objects directly.
 """

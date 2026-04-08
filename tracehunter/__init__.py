@@ -1,11 +1,11 @@
 """
-RawFileReader Python Adapter
-============================
-A Python wrapper around the Thermo Fisher Scientific RawFileReader .NET assemblies.
+TraceHunter
+===========
+A Python adapter for Thermo Fisher Scientific RawFileReader .NET assemblies.
 Uses pythonnet (clr) to bridge Python and .NET.
 """
 
-from .adapter import RawFileAdapter
+from .adapter import TraceHunter
 from .models import (
     ScanInfo,
     CentroidData,
@@ -29,7 +29,7 @@ from .exceptions import (
 
 __version__ = "1.0.0"
 __all__ = [
-    "RawFileAdapter",
+    "TraceHunter",
     "ScanInfo",
     "CentroidData",
     "ProfileData",

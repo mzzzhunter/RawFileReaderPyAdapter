@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="rawfilereader-python",
+    name="tracehunter",
     version="1.0.0",
-    description="Python adapter for Thermo Fisher Scientific RawFileReader .NET assemblies",
+    description="TraceHunter – Python adapter for Thermo Fisher Scientific RawFileReader .NET assemblies",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     packages=find_packages(exclude=["tests*", "examples*"]),
