@@ -1,0 +1,169 @@
+"""
+Data models (plain Python dataclasses) returned by the RawFileAdapter.
+All values are converted from .NET types to native Python types here so
+callers never need to touch pythonnet objects directly.
+"""
+
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
+
+
+@dataclass
+class FileInfo:
+    """Header-level metadata about the RAW file."""
+    file_name: str
+    creation_date: str
+    operator: str
+    comment: str
+    sample_name: str
+    sample_id: str
+    sample_type: str
+    vial: str
+    instrument_method: str
+    tune_method: str
+    acquisition_software_version: str
+    instrument_name: str
+    instrument_serial_number: str
+    number_of_ms_orders: int
+    has_ms_data: bool
+
+
+@dataclass
+class InstrumentInfo:
+    """Per-device instrument metadata."""
+    device_type: str        # e.g. "MS", "UV", "PDA", "Analog"
+    instance_number: int
+    name: str
+    model: str
+    serial_number: str
+    software_version: str
+    hardware_version: str
+    units: str
+    channel_labels: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ScanStats:
+    """Statistics for a single scan."""
+    scan_number: int
+    start_time: float
+    low_mass: float
+    high_mass: float
+    tic: float                # total ion current
+    base_peak_mass: float
+    base_peak_intensity: float
+    packet_count: int
+    scan_event_number: int
+    master_index: int
+    is_centroid_scan: bool
+
+
+@dataclass
+class CentroidData:
+    """Centroid (peak-picked) mass spectrum data."""
+    scan_number: int
+    masses: List[float]
+    intensities: List[float]
+    charges: List[float]
+    baselines: List[float]
+    noises: List[float]
+    resolutions: List[float]
+    is_exceptional: bool
+    is_reference: bool
+
+    @property
+    def peaks(self) -> List[Tuple[float, float]]:
+        """Return (mass, intensity) tuples for all peaks."""
+        return list(zip(self.masses, self.intensities))
+
+
+@dataclass
+class ProfileData:
+    """Profile (raw) mass spectrum data, as segmented arrays."""
+    scan_number: int
+    # Each segment is a (positions, intensities) pair
+    segments: List[Tuple[List[float], List[float]]] = field(default_factory=list)
+
+    @property
+    def masses(self) -> List[float]:
+        """Flatten all segment positions into a single list."""
+        result: List[float] = []
+        for pos, _ in self.segments:
+            result.extend(pos)
+        return result
+
+    @property
+    def intensities(self) -> List[float]:
+        """Flatten all segment intensities into a single list."""
+        result: List[float] = []
+        for _, inten in self.segments:
+            result.extend(inten)
+        return result
+
+
+@dataclass
+class ScanInfo:
+    """High-level metadata about a single scan."""
+    scan_number: int
+    scan_filter: str            # e.g. "FTMS + p NSI Full ms [200.00-2000.00]"
+    ms_order: int               # 1 = MS1, 2 = MS2, …
+    retention_time: float       # minutes
+    injection_time: float       # ms
+    is_centroid: bool
+    detector_type: str
+    activation_type: str
+    precursor_mass: Optional[float] = None
+    precursor_charge: Optional[int] = None
+    collision_energy: Optional[float] = None
+    isolation_width: Optional[float] = None
+    monoisotopic_mass: Optional[float] = None
+    ion_injection_time: Optional[float] = None
+
+
+@dataclass
+class ChromatogramData:
+    """A single chromatogram trace."""
+    trace_type: str             # e.g. "BasePeak", "TIC", "MassRange"
+    mass_range: str
+    times: List[float]
+    intensities: List[float]
+
+
+@dataclass
+class TrailerData:
+    """Trailer-extra (auxiliary) data appended to a scan."""
+    scan_number: int
+    fields: dict  # label -> value mapping
+
+
+@dataclass
+class StatusLogEntry:
+    """One row from the instrument status log."""
+    retention_time: float
+    fields: dict  # label -> value mapping
+
+
+@dataclass
+class ScanDependent:
+    """Relationship between a parent scan and its dependent (MS^n) scans."""
+    scan_number: int
+    dependent_scan_numbers: List[int]
+
+
+@dataclass
+class MassPrecision:
+    """Mass accuracy / precision estimate for a single peak."""
+    mass: float
+    intensity: float
+    resolution: float
+    mz_accuracy_mass: float     # ppm
+    mz_accuracy_mmu: float      # mmu
+
+
+@dataclass
+class AveragedScan:
+    """Result from averaging multiple scans."""
+    first_scan: int
+    last_scan: int
+    masses: List[float]
+    intensities: List[float]
