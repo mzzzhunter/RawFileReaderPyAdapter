@@ -39,6 +39,7 @@ from .models import (
     ScanInfo,
     ScanStats,
     StatusLogEntry,
+    SubtractedSpectrum,
     TrailerData,
 )
 
@@ -46,6 +47,97 @@ from .models import (
 _ns_data = "ThermoFisher.CommonCore.Data"
 _ns_reader = "ThermoFisher.CommonCore.RawFileReader"
 _ns_precis = "ThermoFisher.CommonCore.MassPrecisionEstimator"
+
+# ---------------------------------------------------------------------------
+# Pure-Python helpers used by spectral subtraction (no .NET dependency)
+# ---------------------------------------------------------------------------
+
+def _apply_mass_range(
+    masses: List[float],
+    intensities: List[float],
+    mass_range: Optional[Tuple[float, float]],
+) -> Tuple[List[float], List[float]]:
+    """Filter parallel mass/intensity lists to *mass_range* (inclusive)."""
+    if mass_range is None:
+        return masses, intensities
+    lo, hi = mass_range
+    pairs = [(m, i) for m, i in zip(masses, intensities) if lo <= m <= hi]
+    if not pairs:
+        return [], []
+    m_out, i_out = zip(*pairs)
+    return list(m_out), list(i_out)
+
+
+def _normalize_to_tic(intensities: List[float]) -> List[float]:
+    """Divide all intensities by their sum (TIC normalisation)."""
+    tic = sum(intensities)
+    if tic == 0:
+        return intensities[:]
+    return [v / tic for v in intensities]
+
+
+def _find_closest(
+    target: float,
+    sorted_masses: List[float],
+    tol_ppm: float,
+) -> Optional[int]:
+    """
+    Binary-search *sorted_masses* for the index closest to *target* within
+    *tol_ppm*.  Returns ``None`` when no match exists within tolerance.
+    """
+    if not sorted_masses:
+        return None
+    tol_da = target * tol_ppm * 1e-6
+    lo, hi = 0, len(sorted_masses) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if sorted_masses[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    # Check the two neighbouring candidates
+    best_idx: Optional[int] = None
+    best_delta = tol_da
+    for idx in (hi, lo):
+        if 0 <= idx < len(sorted_masses):
+            delta = abs(sorted_masses[idx] - target)
+            if delta <= best_delta:
+                best_delta = delta
+                best_idx = idx
+    return best_idx
+
+
+def _linear_interp(
+    x_out: List[float],
+    x_in: List[float],
+    y_in: List[float],
+) -> List[float]:
+    """
+    Linearly interpolate (x_in, y_in) at each point in x_out.
+    Points outside the range of x_in are extrapolated as 0.
+    Both x_out and x_in must be sorted ascending.
+    """
+    if not x_in or not y_in:
+        return [0.0] * len(x_out)
+
+    result: List[float] = []
+    j = 0
+    n = len(x_in)
+    for x in x_out:
+        # Advance j so x_in[j] is the first value >= x
+        while j < n - 1 and x_in[j + 1] <= x:
+            j += 1
+        if x < x_in[0] or x > x_in[-1]:
+            result.append(0.0)
+        elif x == x_in[j]:
+            result.append(y_in[j])
+        elif j + 1 < n:
+            # Interpolate between j and j+1
+            t = (x - x_in[j]) / (x_in[j + 1] - x_in[j])
+            result.append(y_in[j] + t * (y_in[j + 1] - y_in[j]))
+        else:
+            result.append(y_in[j])
+    return result
 
 
 class RawFileAdapter:
@@ -956,6 +1048,191 @@ class RawFileAdapter:
             "profile": profile,
             "out_of_order": out_of_order,
         }
+
+    # ------------------------------------------------------------------
+    # Spectral subtraction
+    # ------------------------------------------------------------------
+
+    def subtract_spectra(
+        self,
+        scan_a: int,
+        scan_b: int,
+        mass_range: Optional[Tuple[float, float]] = None,
+        mass_tolerance_ppm: float = 5.0,
+        normalize: bool = False,
+    ) -> SubtractedSpectrum:
+        """
+        Subtract the spectrum of *scan_b* from *scan_a* (A − B).
+
+        Both scans must share the **same scan filter string** (same analyzer,
+        polarity, MS order, and mass range).  Subtraction is performed in
+        centroid space when either scan is a centroid scan, and in profile
+        space when both are profile scans.
+
+        Parameters
+        ----------
+        scan_a:
+            1-based scan number of the minuend (the scan to subtract *from*).
+        scan_b:
+            1-based scan number of the subtrahend (the scan being subtracted).
+        mass_range:
+            Optional ``(low_mz, high_mz)`` tuple to restrict the output to a
+            sub-range of the spectrum.  Peaks / data points outside this range
+            are discarded before subtraction.
+        mass_tolerance_ppm:
+            Matching tolerance (in ppm) used when aligning centroid peaks from
+            the two scans.  Ignored for profile subtraction.
+        normalize:
+            When ``True`` each spectrum is divided by its total ion current
+            before subtraction, making the result relative rather than
+            absolute.
+
+        Returns
+        -------
+        SubtractedSpectrum
+            Contains ``masses``, signed ``intensities`` (A − B), and
+            ``intensities_clipped`` (negatives zeroed).  Use the ``peaks``
+            property to iterate only the surviving (positive) peaks.
+
+        Raises
+        ------
+        ScanNotFoundError
+            If either scan number is outside the valid range.
+        ValueError
+            If the two scans have different scan filter strings.
+        """
+        self._check_open()
+        self._check_scan(scan_a)
+        self._check_scan(scan_b)
+
+        filter_a = str(self._raw_file.GetFilterForScanNumber(scan_a))
+        filter_b = str(self._raw_file.GetFilterForScanNumber(scan_b))
+        if filter_a != filter_b:
+            raise ValueError(
+                f"Cannot subtract scans with different filters.\n"
+                f"  scan {scan_a}: {filter_a!r}\n"
+                f"  scan {scan_b}: {filter_b!r}"
+            )
+
+        is_centroid_a = "FTMS" in filter_a.upper()
+        is_centroid_b = "FTMS" in filter_b.upper()
+        use_centroid = is_centroid_a or is_centroid_b
+
+        if use_centroid:
+            result = self._subtract_centroid(
+                scan_a, scan_b, mass_range, mass_tolerance_ppm, normalize
+            )
+        else:
+            result = self._subtract_profile(
+                scan_a, scan_b, mass_range, normalize
+            )
+
+        masses, intensities = result
+        intensities_clipped = [max(0.0, v) for v in intensities]
+
+        return SubtractedSpectrum(
+            scan_a=scan_a,
+            scan_b=scan_b,
+            scan_filter=filter_a,
+            mass_range=mass_range,
+            is_centroid=use_centroid,
+            masses=masses,
+            intensities=intensities,
+            intensities_clipped=intensities_clipped,
+        )
+
+    # --- centroid subtraction helpers ------------------------------------
+
+    def _subtract_centroid(
+        self,
+        scan_a: int,
+        scan_b: int,
+        mass_range: Optional[Tuple[float, float]],
+        tol_ppm: float,
+        normalize: bool,
+    ) -> Tuple[List[float], List[float]]:
+        """Match peaks by m/z within *tol_ppm* and subtract intensities."""
+        cs_a = self._raw_file.GetCentroidStream(scan_a, False)
+        cs_b = self._raw_file.GetCentroidStream(scan_b, False)
+
+        masses_a = [float(m) for m in cs_a.Masses] if cs_a.Masses else []
+        inten_a  = [float(i) for i in cs_a.Intensities] if cs_a.Intensities else []
+        masses_b = [float(m) for m in cs_b.Masses] if cs_b.Masses else []
+        inten_b  = [float(i) for i in cs_b.Intensities] if cs_b.Intensities else []
+
+        # Apply mass range filter
+        masses_a, inten_a = _apply_mass_range(masses_a, inten_a, mass_range)
+        masses_b, inten_b = _apply_mass_range(masses_b, inten_b, mass_range)
+
+        # Optional TIC normalisation
+        if normalize:
+            inten_a = _normalize_to_tic(inten_a)
+            inten_b = _normalize_to_tic(inten_b)
+
+        # Build a fast lookup for scan_b peaks: mass -> intensity
+        # For each scan_a peak, find the closest scan_b peak within tolerance.
+        # Unmatched scan_b peaks are subtracted as stand-alone negative entries.
+        matched_b = [False] * len(masses_b)
+        out_masses: List[float] = []
+        out_intensities: List[float] = []
+
+        for m_a, i_a in zip(masses_a, inten_a):
+            best_idx = _find_closest(m_a, masses_b, tol_ppm)
+            if best_idx is not None:
+                matched_b[best_idx] = True
+                out_masses.append(m_a)
+                out_intensities.append(i_a - inten_b[best_idx])
+            else:
+                out_masses.append(m_a)
+                out_intensities.append(i_a)
+
+        # Peaks only in scan_b → appear as negative entries in the result
+        for idx, (m_b, i_b) in enumerate(zip(masses_b, inten_b)):
+            if not matched_b[idx]:
+                out_masses.append(m_b)
+                out_intensities.append(-i_b)
+
+        # Re-sort by mass
+        pairs = sorted(zip(out_masses, out_intensities), key=lambda x: x[0])
+        if pairs:
+            out_masses, out_intensities = zip(*pairs)
+            return list(out_masses), list(out_intensities)
+        return [], []
+
+    # --- profile subtraction helpers -------------------------------------
+
+    def _subtract_profile(
+        self,
+        scan_a: int,
+        scan_b: int,
+        mass_range: Optional[Tuple[float, float]],
+        normalize: bool,
+    ) -> Tuple[List[float], List[float]]:
+        """
+        Subtract profile spectra by interpolating scan_b onto scan_a's m/z grid.
+        """
+        stats_a = self._raw_file.GetScanStatsForScanNumber(scan_a)
+        stats_b = self._raw_file.GetScanStatsForScanNumber(scan_b)
+        seg_a = self._raw_file.GetSegmentedScanFromScanNumber(scan_a, stats_a)
+        seg_b = self._raw_file.GetSegmentedScanFromScanNumber(scan_b, stats_b)
+
+        masses_a  = [float(p) for p in seg_a.Positions]  if seg_a and seg_a.Positions  else []
+        inten_a   = [float(i) for i in seg_a.Intensities] if seg_a and seg_a.Intensities else []
+        masses_b  = [float(p) for p in seg_b.Positions]  if seg_b and seg_b.Positions  else []
+        inten_b   = [float(i) for i in seg_b.Intensities] if seg_b and seg_b.Intensities else []
+
+        masses_a, inten_a = _apply_mass_range(masses_a, inten_a, mass_range)
+        masses_b, inten_b = _apply_mass_range(masses_b, inten_b, mass_range)
+
+        if normalize:
+            inten_a = _normalize_to_tic(inten_a)
+            inten_b = _normalize_to_tic(inten_b)
+
+        # Interpolate scan_b intensities at scan_a positions
+        inten_b_interp = _linear_interp(masses_a, masses_b, inten_b)
+        out_intensities = [a - b for a, b in zip(inten_a, inten_b_interp)]
+
+        return masses_a, out_intensities
 
     # ------------------------------------------------------------------
     # Repr

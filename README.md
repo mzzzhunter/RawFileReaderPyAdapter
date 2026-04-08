@@ -27,6 +27,7 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
   - [Mass Precision Estimation](#mass-precision-estimation)
   - [Bulk Iteration Helpers](#bulk-iteration-helpers)
   - [Scan Quality Analysis](#scan-quality-analysis)
+  - [Spectral Subtraction](#spectral-subtraction)
 - [Data Models](#data-models)
 - [Exceptions](#exceptions)
 - [Environment Variables](#environment-variables)
@@ -516,6 +517,66 @@ print(f"Out-of-order scans: {summary['out_of_order']}")
 
 ---
 
+### Spectral Subtraction
+
+#### `subtract_spectra(scan_a, scan_b, mass_range=None, mass_tolerance_ppm=5.0, normalize=False) -> SubtractedSpectrum`
+
+Subtract the spectrum of *scan_b* from *scan_a* (A − B).
+
+**Rules**
+- Both scans **must share the same scan filter string** (same analyzer, polarity, MS order, and mass range).  A `ValueError` is raised if they differ.
+- Subtraction is performed in **centroid space** when either scan is a centroid (FTMS) scan, and in **profile space** when both are profile scans.
+- Centroid peaks are matched by m/z within `mass_tolerance_ppm`.  Unmatched peaks from scan_a pass through unchanged; unmatched peaks from scan_b appear as negative entries.
+- Profile spectra are aligned by linearly interpolating scan_b onto scan_a's m/z grid.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `scan_a` | `int` | — | Minuend scan number |
+| `scan_b` | `int` | — | Subtrahend scan number |
+| `mass_range` | `tuple[float,float] \| None` | `None` | Restrict to `(low_mz, high_mz)` before subtracting |
+| `mass_tolerance_ppm` | `float` | `5.0` | Peak-matching tolerance (centroid mode only) |
+| `normalize` | `bool` | `False` | Divide each spectrum by its TIC before subtracting |
+
+```python
+from rawfilereader import RawFileAdapter
+
+with RawFileAdapter("sample.raw") as rf:
+    # Basic subtraction – scan 1 minus scan 2 (same filter required)
+    result = rf.subtract_spectra(scan_a=1, scan_b=2)
+
+    # Signed intensities (negative = present only in scan_b)
+    for mass, intensity in zip(result.masses, result.intensities):
+        print(f"  {mass:.4f}  {intensity:+.0f}")
+
+    # Only surviving (positive) peaks via .peaks property
+    for mass, intensity in result.peaks:
+        print(f"  {mass:.4f}  {intensity:.0f}")
+
+    # Restrict to a mass range
+    result = rf.subtract_spectra(1, 2, mass_range=(400.0, 600.0))
+
+    # TIC-normalised subtraction (relative comparison)
+    result = rf.subtract_spectra(10, 20, normalize=True)
+
+    # Tighter matching tolerance for high-res instruments
+    result = rf.subtract_spectra(1, 2, mass_tolerance_ppm=2.0)
+```
+
+**`SubtractedSpectrum` fields**
+
+| Field | Description |
+|---|---|
+| `scan_a`, `scan_b` | Input scan numbers |
+| `scan_filter` | The shared filter string |
+| `mass_range` | The applied mass range (or `None`) |
+| `is_centroid` | `True` when centroid-mode subtraction was used |
+| `masses` | m/z array (sorted ascending) |
+| `intensities` | Signed A − B intensities |
+| `intensities_clipped` | Same but negatives zeroed out |
+| `peaks` | Property — `(mass, intensity)` tuples for positive peaks only |
+
+---
+
 ## Data Models
 
 All methods return plain Python dataclasses — no .NET objects leak through.
@@ -534,6 +595,7 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `ScanDependent` | `scan_number`, `dependent_scan_numbers` |
 | `MassPrecision` | `mass`, `mz_accuracy_mass` (ppm), `mz_accuracy_mmu`, `resolution` |
 | `AveragedScan` | `first_scan`, `last_scan`, `masses`, `intensities` |
+| `SubtractedSpectrum` | `scan_a`, `scan_b`, `scan_filter`, `mass_range`, `is_centroid`, `masses`, `intensities`, `intensities_clipped`, `peaks` |
 
 ---
 
