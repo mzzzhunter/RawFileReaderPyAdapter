@@ -1,15 +1,15 @@
 """
-TraceHunter
-===========
+RawFileAdapter
+==============
 High-level Python wrapper around the Thermo Fisher Scientific RawFileReader
 .NET assemblies.  All public methods return plain Python dataclasses defined
-in :mod:`tracehunter.models`; callers never touch .NET objects directly.
+in :mod:`rawfilereader.models`; callers never touch .NET objects directly.
 
 Usage
 -----
->>> from tracehunter import TraceHunter
->>> with TraceHunter("sample.raw") as th:
-...     info = th.get_file_info()
+>>> from rawfilereader import RawFileAdapter
+>>> with RawFileAdapter("sample.raw") as rf:
+...     info = rf.get_file_info()
 ...     print(info.instrument_name)
 """
 
@@ -48,9 +48,9 @@ _ns_reader = "ThermoFisher.CommonCore.RawFileReader"
 _ns_precis = "ThermoFisher.CommonCore.MassPrecisionEstimator"
 
 
-class TraceHunter:
+class RawFileAdapter:
     """
-    TraceHunter – Python adapter for reading Thermo Scientific RAW files via RawFileReader.
+    Python adapter for reading Thermo Scientific RAW files via RawFileReader.
 
     Parameters
     ----------
@@ -67,14 +67,14 @@ class TraceHunter:
 
     Examples
     --------
-    >>> adapter = TraceHunter("sample.raw")
+    >>> adapter = RawFileAdapter("sample.raw")
     >>> adapter.open()
     >>> scans = adapter.get_scan_range()
     >>> adapter.close()
 
     Use as a context manager to ensure the file is always closed:
 
-    >>> with TraceHunter("sample.raw") as rf:
+    >>> with RawFileAdapter("sample.raw") as rf:
     ...     print(rf.get_file_info().instrument_name)
     """
 
@@ -99,7 +99,7 @@ class TraceHunter:
     # Context-manager support
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "TraceHunter":
+    def __enter__(self) -> "RawFileAdapter":
         self.open()
         return self
 
@@ -963,4 +963,4 @@ class TraceHunter:
 
     def __repr__(self) -> str:
         state = "open" if self.is_open() else "closed"
-        return f"TraceHunter({os.path.basename(self._path)!r}, {state})"
+        return f"RawFileAdapter({os.path.basename(self._path)!r}, {state})"
