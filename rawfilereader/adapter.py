@@ -533,8 +533,40 @@ class RawFileAdapter:
         return float(self._raw_file.RetentionTimeFromScanNumber(scan_number))
 
     def scan_number_from_retention_time(self, retention_time: float) -> int:
-        """Return the scan number closest to *retention_time* (minutes)."""
+        """
+        Return the scan number whose retention time is closest to *retention_time*.
+
+        The .NET layer rounds to the nearest scan; no interpolation is performed.
+
+        Parameters
+        ----------
+        retention_time:
+            Retention time in minutes.
+
+        Returns
+        -------
+        int
+            1-based scan number closest to *retention_time*.
+
+        Raises
+        ------
+        RawFileNotOpenError
+            If the file is not open.
+        ValueError
+            If *retention_time* is outside the retention-time range of the file.
+        """
         self._check_open()
+        first_rt = float(self._raw_file.RetentionTimeFromScanNumber(
+            int(self._raw_file.RunHeaderEx.FirstSpectrum)
+        ))
+        last_rt = float(self._raw_file.RetentionTimeFromScanNumber(
+            int(self._raw_file.RunHeaderEx.LastSpectrum)
+        ))
+        if not (first_rt <= retention_time <= last_rt):
+            raise ValueError(
+                f"retention_time {retention_time:.4f} min is outside the file range "
+                f"[{first_rt:.4f}, {last_rt:.4f}] min."
+            )
         return int(self._raw_file.ScanNumberFromRetentionTime(retention_time))
 
     # ------------------------------------------------------------------
