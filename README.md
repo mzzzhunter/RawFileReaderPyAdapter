@@ -28,6 +28,7 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
   - [Bulk Iteration Helpers](#bulk-iteration-helpers)
   - [Scan Quality Analysis](#scan-quality-analysis)
   - [Spectral Subtraction](#spectral-subtraction)
+  - [Background Subtraction (Thermo)](#background-subtraction-thermo)
 - [Data Models](#data-models)
 - [Exceptions](#exceptions)
 - [Environment Variables](#environment-variables)
@@ -577,6 +578,68 @@ with RawFileAdapter("sample.raw") as rf:
 
 ---
 
+### Background Subtraction (Thermo)
+
+#### `subtract_background(scan_number, background_scan_numbers, mass_range=None) -> BackgroundSubtractedSpectrum`
+
+Remove background from a scan using Thermo Fisher's proprietary
+`BackgroundSubtractor` algorithm.  Unlike `subtract_spectra` (which does a
+simple peak-by-peak A − B difference), this method delegates to the Thermo
+`ThermoFisher.CommonCore.BackgroundSubtraction.dll` noise-aware algorithm.
+The DLL is **optional** — place it in the `libs/` directory alongside the other
+RawFileReader DLLs to enable this method.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `scan_number` | `int` | — | Foreground (signal) scan number |
+| `background_scan_numbers` | `int \| List[int]` | — | One or more background scan numbers; multiple scans are averaged by the .NET layer before subtraction |
+| `mass_range` | `tuple[float,float] \| None` | `None` | Restrict result to `(low_mz, high_mz)` after subtraction |
+
+```python
+from rawfilereader import RawFileAdapter
+
+with RawFileAdapter("sample.raw") as rf:
+    # Single background scan
+    result = rf.subtract_background(
+        scan_number=42,
+        background_scan_numbers=10,
+    )
+    for mass, intensity in result.peaks:
+        print(f"  {mass:.4f}  {intensity:.0f}")
+
+    # Multiple background scans (averaged before subtraction)
+    result = rf.subtract_background(
+        scan_number=42,
+        background_scan_numbers=[8, 9, 10, 11, 12],
+    )
+
+    # Restrict output to a mass window
+    result = rf.subtract_background(
+        scan_number=42,
+        background_scan_numbers=10,
+        mass_range=(200.0, 1200.0),
+    )
+    print(f"Filter : {result.scan_filter}")
+    print(f"Peaks  : {len(result.masses)}")
+```
+
+**`BackgroundSubtractedSpectrum` fields**
+
+| Field | Description |
+|---|---|
+| `scan_number` | Foreground scan number |
+| `background_scans` | List of background scan numbers used |
+| `scan_filter` | Scan filter string of the foreground scan |
+| `masses` | m/z array |
+| `intensities` | Background-subtracted intensities |
+| `peaks` | Property — `(mass, intensity)` tuples for all peaks |
+
+> **Requires** `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs
+> directory.  An `AssemblyLoadError` is raised with a descriptive message if
+> the DLL is absent.
+
+---
+
 ## Data Models
 
 All methods return plain Python dataclasses — no .NET objects leak through.
@@ -596,6 +659,7 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `MassPrecision` | `mass`, `mz_accuracy_mass` (ppm), `mz_accuracy_mmu`, `resolution` |
 | `AveragedScan` | `first_scan`, `last_scan`, `masses`, `intensities` |
 | `SubtractedSpectrum` | `scan_a`, `scan_b`, `scan_filter`, `mass_range`, `is_centroid`, `masses`, `intensities`, `intensities_clipped`, `peaks` |
+| `BackgroundSubtractedSpectrum` | `scan_number`, `background_scans`, `scan_filter`, `masses`, `intensities`, `peaks` — requires `BackgroundSubtraction.dll` |
 
 ---
 
@@ -802,6 +866,40 @@ with RawFileAdapter("sample.raw") as rf:
         print("All scans passed mass-ordering check.")
     else:
         print(f"WARNING: {summary['out_of_order']} scan(s) have out-of-order masses!")
+```
+
+### Example 11 – Background subtraction with the Thermo algorithm
+
+Requires `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs directory.
+
+```python
+from rawfilereader import RawFileAdapter, AssemblyLoadError
+
+with RawFileAdapter("sample.raw") as rf:
+    # Choose a foreground scan and nearby background scans
+    # (typically from a region of the chromatogram with no analyte signal)
+    signal_scan = rf.scan_number_from_retention_time(5.2)
+    bg_start    = rf.scan_number_from_retention_time(1.0)
+    bg_end      = rf.scan_number_from_retention_time(1.5)
+    bg_scans    = list(range(bg_start, bg_end + 1))
+
+    try:
+        result = rf.subtract_background(
+            scan_number=signal_scan,
+            background_scan_numbers=bg_scans,
+            mass_range=(200.0, 2000.0),
+        )
+    except AssemblyLoadError as e:
+        print(f"BackgroundSubtraction DLL not available: {e}")
+    else:
+        print(f"Foreground scan : {result.scan_number}")
+        print(f"Background scans: {result.background_scans}")
+        print(f"Filter          : {result.scan_filter}")
+        print(f"Peaks after BG  : {len(result.peaks)}")
+        print()
+        print(f"{'m/z':>12}  {'Intensity':>14}")
+        for mass, intensity in result.peaks[:20]:
+            print(f"{mass:12.4f}  {intensity:14.0f}")
 ```
 
 ---
