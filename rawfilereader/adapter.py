@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 from .exceptions import (
     AssemblyLoadError,
@@ -29,6 +29,7 @@ from .exceptions import (
 from .loader import load_assemblies
 from .models import (
     AveragedScan,
+    BackgroundSubtractedSpectrum,
     CentroidData,
     ChromatogramData,
     FileInfo,
@@ -1265,6 +1266,103 @@ class RawFileAdapter:
         out_intensities = [a - b for a, b in zip(inten_a, inten_b_interp)]
 
         return masses_a, out_intensities
+
+    # ------------------------------------------------------------------
+    # Thermo Fisher background subtraction
+    # ------------------------------------------------------------------
+
+    def subtract_background(
+        self,
+        scan_number: int,
+        background_scan_numbers: Union[int, List[int]],
+        mass_range: Optional[Tuple[float, float]] = None,
+    ) -> BackgroundSubtractedSpectrum:
+        """
+        Remove background from *scan_number* using the Thermo Fisher
+        ``BackgroundSubtractor`` algorithm.
+
+        This method delegates to Thermo's proprietary noise-aware algorithm
+        rather than the simple peak-matching approach used by
+        :meth:`subtract_spectra`.  The
+        ``ThermoFisher.CommonCore.BackgroundSubtraction.dll`` must be present
+        in the libs directory.
+
+        Parameters
+        ----------
+        scan_number:
+            1-based scan number of the foreground (signal) scan.
+        background_scan_numbers:
+            A single background scan number (``int``) or a list of scan
+            numbers.  When a list is supplied, the background scans are
+            averaged by the .NET layer before subtraction.
+        mass_range:
+            Optional ``(low_mz, high_mz)`` window applied to the result
+            *after* subtraction.
+
+        Returns
+        -------
+        BackgroundSubtractedSpectrum
+
+        Raises
+        ------
+        RawFileNotOpenError
+            If the file is not open.
+        ScanNotFoundError
+            If *scan_number* or any background scan number is out of range.
+        AssemblyLoadError
+            If ``ThermoFisher.CommonCore.BackgroundSubtraction.dll`` is not
+            loaded.
+        """
+        self._check_open()
+        self._check_scan(scan_number)
+
+        if isinstance(background_scan_numbers, int):
+            background_scan_numbers = [background_scan_numbers]
+        for bg in background_scan_numbers:
+            self._check_scan(bg)
+
+        try:
+            from ThermoFisher.CommonCore.BackgroundSubtraction import BackgroundSubtractor  # type: ignore
+        except ImportError as exc:
+            raise AssemblyLoadError(
+                "ThermoFisher.CommonCore.BackgroundSubtraction.dll is not loaded.  "
+                "Place it in the libs directory alongside the other RawFileReader DLLs."
+            ) from exc
+
+        scan_filter = str(self._raw_file.GetFilterForScanNumber(scan_number))
+
+        # Foreground centroid stream
+        fg_centroid = self._raw_file.GetCentroidStream(scan_number, False)
+
+        # Background: single scan or averaged list
+        if len(background_scan_numbers) == 1:
+            bg_centroid = self._raw_file.GetCentroidStream(background_scan_numbers[0], False)
+        else:
+            from System.Collections.Generic import List as DotNetList  # type: ignore
+            from System import Int32  # type: ignore
+            dn_list = DotNetList[Int32]()
+            for s in background_scan_numbers:
+                dn_list.Add(Int32(s))
+            opts = self._raw_file.DefaultMassOptions()
+            bg_centroid = self._raw_file.AverageScans(dn_list, opts)
+
+        # Thermo's background-subtraction algorithm
+        subtractor = BackgroundSubtractor()
+        result = subtractor.Subtract(fg_centroid, bg_centroid)
+
+        masses = [float(m) for m in result.Masses] if result and result.Masses else []
+        intensities = [float(i) for i in result.Intensities] if result and result.Intensities else []
+
+        if mass_range is not None:
+            masses, intensities = _apply_mass_range(masses, intensities, mass_range)
+
+        return BackgroundSubtractedSpectrum(
+            scan_number=scan_number,
+            background_scans=list(background_scan_numbers),
+            scan_filter=scan_filter,
+            masses=masses,
+            intensities=intensities,
+        )
 
     # ------------------------------------------------------------------
     # Repr

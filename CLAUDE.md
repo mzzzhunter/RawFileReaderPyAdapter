@@ -60,6 +60,7 @@ All 13 public data models live in `rawfilereader/models.py`:
 | `MassPrecision` | `get_mass_precision()` |
 | `AveragedScan` | `average_scans_in_range()`, `average_scans()` |
 | `SubtractedSpectrum` | `subtract_spectra()` |
+| `BackgroundSubtractedSpectrum` | `subtract_background()` |
 
 When adding a new method that returns structured data, add a new dataclass to `models.py` first, then implement the adapter method.
 
@@ -149,7 +150,7 @@ Everything exported from `rawfilereader/__init__.py` is public. Adding or removi
 
 **Classes:** `RawFileAdapter`
 
-**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `SubtractedSpectrum`
+**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `SubtractedSpectrum`, `BackgroundSubtractedSpectrum`
 
 **Exceptions:** `RawFileError`, `RawFileNotOpenError`, `RawFileInAcquisitionError`, `InstrumentSelectionError`, `ScanNotFoundError`
 
