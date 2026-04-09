@@ -72,8 +72,8 @@ pip install .
 Or directly from source:
 
 ```bash
-git clone https://github.com/mzzzhunter/tracehunter.git
-cd tracehunter
+git clone https://github.com/mzzzhunter/RawFileReaderPyAdapter.git
+cd RawFileReaderPyAdapter
 pip install -r requirements.txt
 ```
 
