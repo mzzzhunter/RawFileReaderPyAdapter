@@ -164,16 +164,25 @@ Note: `AveragedScan` and `AssemblyLoadError` are defined internally but not curr
 # Install in editable mode with pythonnet
 pip install -e .
 
-# Provide the RawFileReader DLLs (not included in repo)
-# Option A: environment variable
-export RAWFILEREADER_LIBS=/path/to/dlls
+# Download the RawFileReader DLLs using the included helper script
+python download_dlls.py                  # required DLLs → ./libs/, sets RAWFILEREADER_LIBS
+python download_dlls.py --include-optional  # also fetches BackgroundSubtraction.dll
+python download_dlls.py --libs-dir /path/to/dlls  # custom destination
 
-# Option B: place DLLs in libs/ next to the package
-mkdir libs && cp *.dll libs/
+# Or set the env variable manually if you already have the DLLs
+export RAWFILEREADER_LIBS=/path/to/dlls
 ```
 
 DLLs must be the NetCore build from:
 `https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs/NetCore`
+
+### `download_dlls.py` flags
+
+| Flag | Description |
+|---|---|
+| `--libs-dir DIR` | Destination directory (default: `./libs/` next to the script) |
+| `--include-optional` | Also download `ThermoFisher.CommonCore.BackgroundSubtraction.dll` |
+| `--no-env` | Skip writing `RAWFILEREADER_LIBS` to the shell config file |
 
 ---
 

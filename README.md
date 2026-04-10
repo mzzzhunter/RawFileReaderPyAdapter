@@ -47,7 +47,29 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 
 ### Required DLLs
 
-Download the DLLs from the `Libs/NetCore` folder of the upstream repository and place them in a `libs/` directory next to this package (or point to them with the `RAWFILEREADER_LIBS` environment variable):
+The easiest way to get the DLLs is the included helper script:
+
+```bash
+# Required DLLs only
+python download_dlls.py
+
+# Required + optional BackgroundSubtraction DLL
+python download_dlls.py --include-optional
+
+# Custom destination
+python download_dlls.py --libs-dir /opt/thermo/libs
+
+# Download without writing to shell config
+python download_dlls.py --no-env
+```
+
+The script downloads the DLLs from the upstream repository, places them in
+`./libs/` by default, and writes `export RAWFILEREADER_LIBS=<path>` to your
+shell config file (`~/.bashrc`, `~/.zshrc`, or `~/.profile`).
+
+Alternatively, download them manually from the `Libs/NetCore` folder of the
+upstream repository and place them in a `libs/` directory (or set
+`RAWFILEREADER_LIBS`):
 
 ```
 libs/
@@ -75,12 +97,7 @@ Or directly from source:
 git clone https://github.com/mzzzhunter/RawFileReaderPyAdapter.git
 cd RawFileReaderPyAdapter
 pip install -r requirements.txt
-```
-
-Set the DLL directory:
-
-```bash
-export RAWFILEREADER_LIBS=/path/to/libs
+python download_dlls.py          # download DLLs and set RAWFILEREADER_LIBS
 ```
 
 ---
