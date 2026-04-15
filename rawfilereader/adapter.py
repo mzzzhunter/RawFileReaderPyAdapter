@@ -287,13 +287,8 @@ class RawFileAdapter:
         """Return the .NET Device enum value for *device_type* string."""
         Device = self._device_enum
         mapping = {
-            "MS": Device.MS,
-            "MSAnalog": Device.MSAnalog,
-            "UV": Device.UV,
-            "PDA": Device.PDA,
-            "Analog": Device.Analog,
-            "ADCard": getattr(Device, "ADCard", None),
-            "Lyra": getattr(Device, "Lyra", None),
+            name: getattr(Device, name, None)
+            for name in ("MS", "MSAnalog", "UV", "PDA", "Analog", "ADCard", "Lyra")
         }
         value = mapping.get(device_type)
         if value is None:
