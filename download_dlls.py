@@ -28,7 +28,7 @@ from pathlib import Path
 
 _OWNER = "thermofisherlsms"
 _REPO  = "RawFileReader"
-_PATH  = "Libs/NetCore"
+_PATH  = "Libs/NetCore/Net8/Assemblies"
 
 _REQUIRED_DLLS = [
     "ThermoFisher.CommonCore.Data.dll",
@@ -65,7 +65,7 @@ def _default_branch() -> str:
     """Return the repo's default branch (e.g. 'main' or 'master')."""
     try:
         info = _api_request(
-            f"https://api.github.com/repos/{_OWNER}/{_REPO}"
+            f"https://raw.githubusercontent.com/{_OWNER}/{_REPO}"
         )
         return info.get("default_branch", "main")
     except Exception:
