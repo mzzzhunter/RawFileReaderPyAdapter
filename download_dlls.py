@@ -14,8 +14,10 @@ Usage
 """
 
 import argparse
+import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -23,10 +25,9 @@ from pathlib import Path
 # DLL catalogue
 # ---------------------------------------------------------------------------
 
-_BASE_URL = (
-    "https://raw.githubusercontent.com/thermofisherlsms/RawFileReader"
-    "/main/Libs/NetCore/"
-)
+_OWNER = "thermofisherlsms"
+_REPO  = "RawFileReader"
+_PATH  = "Libs/NetCore"
 
 _REQUIRED_DLLS = [
     "ThermoFisher.CommonCore.Data.dll",
@@ -38,40 +39,90 @@ _OPTIONAL_DLLS = [
     "ThermoFisher.CommonCore.BackgroundSubtraction.dll",
 ]
 
+# Minimum plausible size for a real DLL (LFS pointer files are ~130 bytes)
+_MIN_DLL_BYTES = 10_000
+
 # ---------------------------------------------------------------------------
-# Helpers
+# GitHub helpers
+# ---------------------------------------------------------------------------
+
+def _api_request(url: str) -> dict:
+    """Perform a GitHub API GET and return the parsed JSON."""
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "rawfilereader-python-downloader",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read())
+
+
+def _default_branch() -> str:
+    """Return the repo's default branch (e.g. 'main' or 'master')."""
+    try:
+        info = _api_request(
+            f"https://api.github.com/repos/{_OWNER}/{_REPO}"
+        )
+        return info.get("default_branch", "main")
+    except Exception:
+        return "main"
+
+
+def _dll_url(dll_name: str, branch: str) -> str:
+    """
+    Return the github.com/raw/ URL for a DLL.
+
+    This endpoint follows Git LFS redirects to the actual object store.
+    raw.githubusercontent.com does NOT follow LFS and returns the pointer
+    text instead of the binary, which is why direct CDN URLs fail.
+    """
+    return (
+        f"https://github.com/{_OWNER}/{_REPO}"
+        f"/raw/{branch}/{_PATH}/{dll_name}"
+    )
+
+# ---------------------------------------------------------------------------
+# Download helper
 # ---------------------------------------------------------------------------
 
 def _reporthook(count, block_size, total_size):
-    """Print a simple download progress indicator."""
     if total_size <= 0:
-        downloaded_kb = count * block_size // 1024
-        print(f"\r  {downloaded_kb} KB downloaded...", end="", flush=True)
+        kb = count * block_size // 1024
+        print(f"\r  {kb} KB ...", end="", flush=True)
     else:
         pct = min(100, count * block_size * 100 // total_size)
-        downloaded_kb = min(count * block_size, total_size) // 1024
+        kb = min(count * block_size, total_size) // 1024
         total_kb = total_size // 1024
-        print(f"\r  {downloaded_kb}/{total_kb} KB ({pct}%)", end="", flush=True)
+        print(f"\r  {kb}/{total_kb} KB ({pct}%)", end="", flush=True)
 
 
 def _download(url: str, dest: Path) -> None:
-    """Download *url* to *dest*, printing progress. Cleans up on failure."""
-    print(f"  {dest.name}")
+    """Download *url* to *dest* with progress. Raises on failure or bad size."""
     try:
         urllib.request.urlretrieve(url, dest, reporthook=_reporthook)
-        size_kb = dest.stat().st_size // 1024
-        print(f"\r  {dest.name}: {size_kb} KB — OK               ")
     except Exception as exc:
         dest.unlink(missing_ok=True)
-        print(f"\r  {dest.name}: FAILED — {exc}")
+        print(f"\r  FAILED — {exc}")
         raise
 
+    size = dest.stat().st_size
+    if size < _MIN_DLL_BYTES:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Downloaded file is only {size} bytes — "
+            "likely an LFS pointer or an error page, not a real DLL."
+        )
+
+    print(f"\r  {dest.name}: {size // 1024} KB — OK               ")
+
+# ---------------------------------------------------------------------------
+# Environment variable persistence
+# ---------------------------------------------------------------------------
 
 def _persist_env(libs_dir: Path) -> None:
-    """
-    Write ``export RAWFILEREADER_LIBS=<libs_dir>`` to the user's shell
-    config file on Unix/macOS, or print ``setx`` instructions on Windows.
-    """
     libs_str = str(libs_dir)
     export_line = f'export RAWFILEREADER_LIBS="{libs_str}"'
     marker = "RAWFILEREADER_LIBS"
@@ -82,7 +133,6 @@ def _persist_env(libs_dir: Path) -> None:
         print("Then restart your terminal for the change to take effect.")
         return
 
-    # Determine which shell config to target
     shell_binary = os.environ.get("SHELL", "")
     if "zsh" in shell_binary:
         rc_path = Path.home() / ".zshrc"
@@ -92,7 +142,6 @@ def _persist_env(libs_dir: Path) -> None:
         rc_path = Path.home() / ".profile"
 
     if rc_path.exists() and marker in rc_path.read_text():
-        # Update the existing line in-place
         updated = "\n".join(
             export_line if marker in line else line
             for line in rc_path.read_text().splitlines()
@@ -101,12 +150,11 @@ def _persist_env(libs_dir: Path) -> None:
         print(f"\nUpdated {marker} in {rc_path}")
     else:
         with rc_path.open("a") as fh:
-            fh.write(f"\n# RawFileReader DLL directory (added by download_dlls.py)\n")
+            fh.write("\n# RawFileReader DLL directory (added by download_dlls.py)\n")
             fh.write(f"{export_line}\n")
         print(f"\nAdded {marker} to {rc_path}")
 
-    print(f'Run:  source {rc_path}  (or open a new terminal) to apply.')
-
+    print(f"Run:  source {rc_path}  (or open a new terminal) to apply.")
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -130,10 +178,7 @@ def main() -> None:
     parser.add_argument(
         "--include-optional",
         action="store_true",
-        help=(
-            "Also download optional DLLs "
-            "(ThermoFisher.CommonCore.BackgroundSubtraction.dll)"
-        ),
+        help="Also download ThermoFisher.CommonCore.BackgroundSubtraction.dll",
     )
     parser.add_argument(
         "--no-env",
@@ -149,6 +194,11 @@ def main() -> None:
         _OPTIONAL_DLLS if args.include_optional else []
     )
 
+    # Discover the default branch once (avoids hardcoding 'main' vs 'master')
+    print("Resolving repository branch...", end=" ", flush=True)
+    branch = _default_branch()
+    print(branch)
+
     print(f"Destination : {libs_dir}")
     print(f"DLLs        : {len(dlls_to_download)} "
           f"({'including optional' if args.include_optional else 'required only'})")
@@ -160,25 +210,26 @@ def main() -> None:
         if dest.exists():
             print(f"  {dll_name}: already present, skipping.")
             continue
-        url = _BASE_URL + dll_name
+        url = _dll_url(dll_name, branch)
+        print(f"  {dll_name}")
         try:
             _download(url, dest)
-        except Exception:
+        except Exception as exc:
+            print(f"  {dll_name}: FAILED — {exc}")
             failed.append(dll_name)
 
     print()
 
     if failed:
-        print(f"ERROR: The following DLL(s) could not be downloaded:")
+        print("ERROR: The following DLL(s) could not be downloaded:")
         for name in failed:
             print(f"  - {name}")
         print(
-            "\nYou can download them manually from:\n"
-            "  https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs/NetCore"
+            "\nDownload them manually from:\n"
+            f"  https://github.com/{_OWNER}/{_REPO}/tree/{branch}/{_PATH}"
         )
         sys.exit(1)
 
-    # Set for the current process
     os.environ["RAWFILEREADER_LIBS"] = str(libs_dir)
     print(f"RAWFILEREADER_LIBS={libs_dir}")
 
