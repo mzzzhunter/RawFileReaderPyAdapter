@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -88,15 +89,22 @@ def _dll_url(dll_name: str, branch: str) -> str:
 # Download helper
 # ---------------------------------------------------------------------------
 
+_last_report: float = 0.0
+
 def _reporthook(count, block_size, total_size):
+    global _last_report
+    now = time.monotonic()
+    if count > 0 and now - _last_report < 1.0:
+        return
+    _last_report = now
     if total_size <= 0:
         kb = count * block_size // 1024
-        print(f"\r  {kb} KB ...", end="", flush=True)
+        print(f"    {kb} KB ...", flush=True)
     else:
         pct = min(100, count * block_size * 100 // total_size)
         kb = min(count * block_size, total_size) // 1024
         total_kb = total_size // 1024
-        print(f"\r  {kb}/{total_kb} KB ({pct}%)", end="", flush=True)
+        print(f"    {kb}/{total_kb} KB ({pct}%)", flush=True)
 
 
 def _download(url: str, dest: Path) -> None:
@@ -116,7 +124,7 @@ def _download(url: str, dest: Path) -> None:
             "likely an LFS pointer or an error page, not a real DLL."
         )
 
-    print(f"\r  {dest.name}: {size // 1024} KB — OK               ")
+    print(f"  {dest.name}: {size // 1024} KB — OK")
 
 # ---------------------------------------------------------------------------
 # Environment variable persistence
