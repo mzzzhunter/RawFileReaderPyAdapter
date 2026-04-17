@@ -1,5 +1,7 @@
 # RawFileReader Python Adapter
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mzzzhunter/RawFileReaderPyAdapter/blob/claude/rawfilereader-python-adapter-Tgdgr/colab_demo.ipynb)
+
 A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReader](https://github.com/thermofisherlsms/RawFileReader) .NET assemblies.  It uses [pythonnet](https://github.com/pythonnet/pythonnet) to bridge Python and .NET so you can read Thermo `.raw` mass-spectrometry files without leaving Python.
 
 ---
