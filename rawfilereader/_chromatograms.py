@@ -49,6 +49,7 @@ class ChromatogramsMixin:
             ChromatogramTraceSettings,
             TraceType,
         )
+        from ThermoFisher.CommonCore.Data import Range as DotNetRange  # type: ignore
         from System import Array  # type: ignore
 
         trace_map = {
@@ -61,7 +62,10 @@ class ChromatogramsMixin:
 
         settings = ChromatogramTraceSettings(dn_trace)
         if mass_range:
-            settings.Filter = mass_range
+            lo_str, hi_str = mass_range.split("-", 1)
+            settings.MassRanges = Array[DotNetRange](
+                [DotNetRange(float(lo_str), float(hi_str))]
+            )
 
         first, last = self.get_scan_range()
         s0 = start_scan if start_scan > 0 else first
