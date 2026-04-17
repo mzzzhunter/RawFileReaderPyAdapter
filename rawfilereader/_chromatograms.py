@@ -25,6 +25,7 @@ class ChromatogramsMixin:
         mass_range: str = "",
         start_scan: int = -1,
         end_scan: int = -1,
+        filter_string: str = "",
     ) -> ChromatogramData:
         """
         Extract a chromatogram trace from the file.
@@ -39,6 +40,10 @@ class ChromatogramsMixin:
             e.g. ``"500.0-510.0"``.
         start_scan, end_scan:
             Scan range.  Use ``-1`` for the full file range.
+        filter_string:
+            Scan filter string to restrict which scans contribute to the
+            chromatogram, e.g. ``"FTMS + p NSI Full ms [200.00-2000.00]"``.
+            Use :meth:`get_filters` to list available filters for the file.
 
         Returns
         -------
@@ -66,6 +71,8 @@ class ChromatogramsMixin:
             settings.MassRanges = Array[DotNetRange](
                 [DotNetRange(float(lo_str), float(hi_str))]
             )
+        if filter_string:
+            settings.Filter = filter_string
 
         first, last = self.get_scan_range()
         s0 = start_scan if start_scan > 0 else first
