@@ -176,10 +176,6 @@ class BackgroundSubtractedSpectrum:
 
     Produced by :meth:`RawFileAdapter.subtract_background`.
     Requires ``ThermoFisher.CommonCore.BackgroundSubtraction.dll``.
-
-    Unlike :class:`SubtractedSpectrum` (which computes scan A − scan B),
-    this model is the output of Thermo's proprietary background-removal
-    algorithm, which is aware of the instrument noise model.
     """
     scan_number: int
     background_scans: List[int]   # scan numbers used as background
@@ -191,27 +187,3 @@ class BackgroundSubtractedSpectrum:
     def peaks(self) -> List[Tuple[float, float]]:
         """Return ``(mass, intensity)`` tuples for all peaks."""
         return list(zip(self.masses, self.intensities))
-
-
-@dataclass
-class SubtractedSpectrum:
-    """
-    Result of subtracting one mass spectrum from another (scan_a − scan_b).
-
-    Both input scans must share the same scan filter string.  Intensities are
-    the signed difference; ``intensities_clipped`` zeros out any negative
-    values (i.e. peaks present only in scan_b are removed).
-    """
-    scan_a: int
-    scan_b: int
-    scan_filter: str
-    mass_range: Optional[Tuple[float, float]]   # None = full range
-    is_centroid: bool
-    masses: List[float]
-    intensities: List[float]            # signed  (scan_a − scan_b)
-    intensities_clipped: List[float]    # zeroed-negative version
-
-    @property
-    def peaks(self) -> List[Tuple[float, float]]:
-        """Return ``(mass, intensity)`` tuples using the clipped intensities."""
-        return [(m, i) for m, i in zip(self.masses, self.intensities_clipped) if i > 0]

@@ -27,9 +27,6 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
   - [Status Log](#status-log)
   - [Scan Dependents (MS^n)](#scan-dependents-msn)
   - [Mass Precision Estimation](#mass-precision-estimation)
-  - [Bulk Iteration Helpers](#bulk-iteration-helpers)
-  - [Scan Quality Analysis](#scan-quality-analysis)
-  - [Spectral Subtraction](#spectral-subtraction)
   - [Background Subtraction (Thermo)](#background-subtraction-thermo)
 - [Data Models](#data-models)
 - [Exceptions](#exceptions)
@@ -608,108 +605,12 @@ for e in estimates[:10]:
 
 ---
 
-### Bulk Iteration Helpers
-
-#### `iter_scan_info(ms_order=None) -> Iterator[ScanInfo]`
-
-```python
-# All MS2 scan metadata
-for info in rf.iter_scan_info(ms_order=2):
-    print(f"Scan {info.scan_number}  precursor={info.precursor_mass}")
-```
-
-#### `iter_centroid_data(ms_order=None) -> Iterator[CentroidData]`
-
-```python
-# Collect all MS1 centroids
-ms1_spectra = list(rf.iter_centroid_data(ms_order=1))
-```
-
----
-
-### Scan Quality Analysis
-
-#### `analyze_all_scans() -> dict`
-
-Walks every scan and checks for out-of-order masses (data integrity check).
-
-```python
-summary = rf.analyze_all_scans()
-print(f"Total scans       : {summary['total']}")
-print(f"Centroid scans    : {summary['centroid']}")
-print(f"Profile scans     : {summary['profile']}")
-print(f"Out-of-order scans: {summary['out_of_order']}")
-```
-
----
-
-### Spectral Subtraction
-
-#### `subtract_spectra(scan_a, scan_b, mass_range=None, mass_tolerance_ppm=5.0, normalize=False) -> SubtractedSpectrum`
-
-Subtract the spectrum of *scan_b* from *scan_a* (A − B).
-
-**Rules**
-- Both scans **must share the same scan filter string** (same analyzer, polarity, MS order, and mass range).  A `ValueError` is raised if they differ.
-- Subtraction is performed in **centroid space** when either scan is a centroid (FTMS) scan, and in **profile space** when both are profile scans.
-- Centroid peaks are matched by m/z within `mass_tolerance_ppm`.  Unmatched peaks from scan_a pass through unchanged; unmatched peaks from scan_b appear as negative entries.
-- Profile spectra are aligned by linearly interpolating scan_b onto scan_a's m/z grid.
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `scan_a` | `int` | — | Minuend scan number |
-| `scan_b` | `int` | — | Subtrahend scan number |
-| `mass_range` | `tuple[float,float] \| None` | `None` | Restrict to `(low_mz, high_mz)` before subtracting |
-| `mass_tolerance_ppm` | `float` | `5.0` | Peak-matching tolerance (centroid mode only) |
-| `normalize` | `bool` | `False` | Divide each spectrum by its TIC before subtracting |
-
-```python
-from rawfilereader import RawFileAdapter
-
-with RawFileAdapter("sample.raw") as rf:
-    # Basic subtraction – scan 1 minus scan 2 (same filter required)
-    result = rf.subtract_spectra(scan_a=1, scan_b=2)
-
-    # Signed intensities (negative = present only in scan_b)
-    for mass, intensity in zip(result.masses, result.intensities):
-        print(f"  {mass:.4f}  {intensity:+.0f}")
-
-    # Only surviving (positive) peaks via .peaks property
-    for mass, intensity in result.peaks:
-        print(f"  {mass:.4f}  {intensity:.0f}")
-
-    # Restrict to a mass range
-    result = rf.subtract_spectra(1, 2, mass_range=(400.0, 600.0))
-
-    # TIC-normalised subtraction (relative comparison)
-    result = rf.subtract_spectra(10, 20, normalize=True)
-
-    # Tighter matching tolerance for high-res instruments
-    result = rf.subtract_spectra(1, 2, mass_tolerance_ppm=2.0)
-```
-
-**`SubtractedSpectrum` fields**
-
-| Field | Description |
-|---|---|
-| `scan_a`, `scan_b` | Input scan numbers |
-| `scan_filter` | The shared filter string |
-| `mass_range` | The applied mass range (or `None`) |
-| `is_centroid` | `True` when centroid-mode subtraction was used |
-| `masses` | m/z array (sorted ascending) |
-| `intensities` | Signed A − B intensities |
-| `intensities_clipped` | Same but negatives zeroed out |
-| `peaks` | Property — `(mass, intensity)` tuples for positive peaks only |
-
----
-
 ### Background Subtraction (Thermo)
 
 #### `subtract_background(scan_number, background_scan_numbers, mass_range=None) -> BackgroundSubtractedSpectrum`
 
 Remove background from a scan using Thermo Fisher's proprietary
-`BackgroundSubtractor` algorithm.  Unlike `subtract_spectra` (which does a
-simple peak-by-peak A − B difference), this method delegates to the Thermo
+`BackgroundSubtractor` algorithm, delegating to the
 `ThermoFisher.CommonCore.BackgroundSubtraction.dll` noise-aware algorithm.
 The DLL is **optional** — place it in the `libs/` directory alongside the other
 RawFileReader DLLs to enable this method.
@@ -783,7 +684,6 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `ScanDependent` | `scan_number`, `dependent_scan_numbers` |
 | `MassPrecision` | `mass`, `mz_accuracy_mass` (ppm), `mz_accuracy_mmu`, `resolution` |
 | `AveragedScan` | `first_scan`, `last_scan`, `masses`, `intensities` |
-| `SubtractedSpectrum` | `scan_a`, `scan_b`, `scan_filter`, `mass_range`, `is_centroid`, `masses`, `intensities`, `intensities_clipped`, `peaks` |
 | `BackgroundSubtractedSpectrum` | `scan_number`, `background_scans`, `scan_filter`, `masses`, `intensities`, `peaks` — requires `BackgroundSubtraction.dll` |
 
 ---
@@ -850,10 +750,14 @@ from rawfilereader import RawFileAdapter
 
 results = []
 with RawFileAdapter("sample.raw") as rf:
-    for info in rf.iter_scan_info(ms_order=1):
-        centroid = rf.get_centroid_stream(info.scan_number)
+    first, last = rf.get_scan_range()
+    for scan in range(first, last + 1):
+        info = rf.get_scan_info(scan)
+        if info.ms_order != 1:
+            continue
+        centroid = rf.get_centroid_stream(scan)
         results.append({
-            "scan": info.scan_number,
+            "scan": scan,
             "rt": info.retention_time,
             "peaks": centroid.peaks,
         })
@@ -884,9 +788,13 @@ print("TIC exported to tic.csv")
 from rawfilereader import RawFileAdapter
 
 with RawFileAdapter("sample.raw") as rf:
-    for info in rf.iter_scan_info(ms_order=2):
+    first, last = rf.get_scan_range()
+    for scan in range(first, last + 1):
+        info = rf.get_scan_info(scan)
+        if info.ms_order != 2:
+            continue
         print(
-            f"Scan {info.scan_number:5d} "
+            f"Scan {scan:5d} "
             f"RT={info.retention_time:.3f} min  "
             f"precursor={info.precursor_mass or 'N/A':.4f}  "
             f"z={info.precursor_charge}  "
@@ -976,24 +884,7 @@ with RawFileAdapter("sample.raw") as rf:
                 print(f"MS1 scan {scan} -> MS2 scans: {deps.dependent_scan_numbers}")
 ```
 
-### Example 10 – Run data-integrity check
-
-```python
-from rawfilereader import RawFileAdapter
-
-with RawFileAdapter("sample.raw") as rf:
-    summary = rf.analyze_all_scans()
-    print(f"Total          : {summary['total']}")
-    print(f"Centroid scans : {summary['centroid']}")
-    print(f"Profile scans  : {summary['profile']}")
-    print(f"Out-of-order   : {summary['out_of_order']}")
-    if summary["out_of_order"] == 0:
-        print("All scans passed mass-ordering check.")
-    else:
-        print(f"WARNING: {summary['out_of_order']} scan(s) have out-of-order masses!")
-```
-
-### Example 11 – Background subtraction with the Thermo algorithm
+### Example 10 – Background subtraction with the Thermo algorithm
 
 Requires `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs directory.
 

@@ -52,14 +52,13 @@ All 13 public data models live in `rawfilereader/models.py`:
 | `ScanStats` | `get_scan_stats()` |
 | `CentroidData` | `get_centroid_stream()` |
 | `ProfileData` | `get_profile_data()` |
-| `ScanInfo` | `get_scan_info()`, `iter_scan_info()` |
+| `ScanInfo` | `get_scan_info()` |
 | `ChromatogramData` | `get_chromatogram()` |
 | `TrailerData` | `get_trailer_data()` |
 | `StatusLogEntry` | `get_status_log_for_scan()` |
 | `ScanDependent` | `get_scan_dependents()` |
 | `MassPrecision` | `get_mass_precision()` |
 | `AveragedScan` | `average_scans_in_range()`, `average_scans()` |
-| `SubtractedSpectrum` | `subtract_spectra()` |
 | `BackgroundSubtractedSpectrum` | `subtract_background()` |
 
 When adding a new method that returns structured data, add a new dataclass to `models.py` first, then implement the adapter method.
@@ -69,7 +68,7 @@ When adding a new method that returns structured data, add a new dataclass to `m
 Some dataclasses expose computed properties for ergonomics:
 - `CentroidData.peaks` → `List[Tuple[float, float]]` (mass, intensity pairs)
 - `ProfileData.masses` / `.intensities` → flattened from `segments`
-- `SubtractedSpectrum.peaks` → clipped (non-negative) (mass, intensity) pairs
+- `BackgroundSubtractedSpectrum.peaks` → `(mass, intensity)` pairs
 
 Follow this pattern when a derived view of the data is clearly useful.
 
@@ -129,18 +128,9 @@ Follow this checklist:
 
 ---
 
-## Pure-Python Helpers in `adapter.py`
+## Scope
 
-Four module-level pure-Python helpers support the spectral subtraction feature (no .NET dependency):
-
-| Helper | Purpose |
-|---|---|
-| `_apply_mass_range(masses, intensities, range)` | Filter lists to a m/z window |
-| `_normalize_to_tic(intensities)` | Divide by sum (TIC normalisation) |
-| `_find_closest(target, sorted_masses, tol_ppm)` | Binary-search with ppm tolerance |
-| `_linear_interp(x_out, x_in, y_in)` | Linear interpolation for profile grids |
-
-Keep these functions free of .NET imports. They are tested independently of any DLL.
+Every public method on `RawFileAdapter` is a thin wrapper around one or more RawFileReader DLL calls. **Do not add pure-Python algorithms** (e.g. spectral math, cross-scan iteration helpers, diagnostic walkers). If a feature is not implemented by the underlying DLL, it does not belong in this adapter.
 
 ---
 
@@ -150,7 +140,7 @@ Everything exported from `rawfilereader/__init__.py` is public. Adding or removi
 
 **Classes:** `RawFileAdapter`
 
-**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `SubtractedSpectrum`, `BackgroundSubtractedSpectrum`
+**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `BackgroundSubtractedSpectrum`
 
 **Exceptions:** `RawFileError`, `RawFileNotOpenError`, `RawFileInAcquisitionError`, `InstrumentSelectionError`, `ScanNotFoundError`
 
@@ -192,7 +182,6 @@ There are currently no automated tests in this repository. When adding tests:
 - Use `pytest` as the test runner.
 - Place tests under a `tests/` directory.
 - Tests that require real `.raw` files or the RawFileReader DLLs should be skipped when those resources are absent (use `pytest.importorskip` or a fixture that checks `RAWFILEREADER_LIBS`).
-- The pure-Python helpers in `adapter.py` (`_apply_mass_range`, `_normalize_to_tic`, `_find_closest`, `_linear_interp`) can be tested without any DLLs.
 
 ---
 

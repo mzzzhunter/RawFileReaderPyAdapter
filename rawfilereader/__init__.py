@@ -18,7 +18,6 @@ from .models import (
     StatusLogEntry,
     ScanDependent,
     MassPrecision,
-    SubtractedSpectrum,
     BackgroundSubtractedSpectrum,
 )
 from .exceptions import (
@@ -43,7 +42,6 @@ __all__ = [
     "StatusLogEntry",
     "ScanDependent",
     "MassPrecision",
-    "SubtractedSpectrum",
     "BackgroundSubtractedSpectrum",
     "RawFileError",
     "RawFileNotOpenError",
