@@ -78,7 +78,15 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
         return
 
     try:
-        import clr  # noqa: F401 (pythonnet)
+        import pythonnet  # noqa: F401
+        # pythonnet defaults to Mono on Linux; force CoreCLR (.NET 6+/8).
+        # Wrapped in try/except because load() raises if called after the
+        # runtime is already initialised (e.g. user called it beforehand).
+        try:
+            pythonnet.load("coreclr")
+        except Exception:
+            pass
+        import clr  # noqa: F401
     except ImportError as exc:
         raise AssemblyLoadError(
             "pythonnet is not installed.  Install it with:  pip install pythonnet"
