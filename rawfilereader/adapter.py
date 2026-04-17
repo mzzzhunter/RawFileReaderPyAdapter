@@ -816,8 +816,6 @@ class RawFileAdapter:
             ChromatogramTraceSettings,
             TraceType,
         )
-        from ThermoFisher.CommonCore.Data.FilterEnums import ChromatogramFormat  # type: ignore
-        from ThermoFisher.CommonCore.Data import Business  # type: ignore
 
         trace_map = {
             "BasePeak": TraceType.BasePeak,
