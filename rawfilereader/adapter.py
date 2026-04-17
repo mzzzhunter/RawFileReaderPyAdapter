@@ -818,13 +818,13 @@ class RawFileAdapter:
         )
 
         trace_map = {
-            "BasePeak": TraceType.BasePeak,
-            "TIC": TraceType.TIC,
-            "MassRange": TraceType.MassRange,
-            "EIC": TraceType.MassRange,
-            "NeutralLoss": TraceType.NeutralLoss,
+            name: getattr(TraceType, name, None)
+            for name in ("BasePeak", "TIC", "MassRange", "NeutralLoss",
+                         "UV", "PDA", "Analog", "ADCard")
         }
-        dn_trace = trace_map.get(trace_type, TraceType.BasePeak)
+        # MassRange is also exposed as EIC
+        trace_map["EIC"] = trace_map.get("MassRange")
+        dn_trace = trace_map.get(trace_type) or TraceType.BasePeak
 
         settings = ChromatogramTraceSettings(dn_trace)
         if mass_range:
