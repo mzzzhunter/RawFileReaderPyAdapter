@@ -48,8 +48,8 @@ class ChromatogramsMixin:
         from ThermoFisher.CommonCore.Data.Business import (  # type: ignore
             ChromatogramTraceSettings,
             TraceType,
+            Range as DotNetRange,
         )
-        from ThermoFisher.CommonCore.Data import Range as DotNetRange  # type: ignore
         from System import Array  # type: ignore
 
         trace_map = {
@@ -129,8 +129,8 @@ class ChromatogramsMixin:
         from ThermoFisher.CommonCore.Data.Business import (  # type: ignore
             ChromatogramTraceSettings,
             TraceType,
+            Range as DotNetRange,
         )
-        from ThermoFisher.CommonCore.Data import Range as DotNetRange  # type: ignore
         from System import Array  # type: ignore
 
         trace_map = {
