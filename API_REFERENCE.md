@@ -229,7 +229,7 @@ Returned by `get_scan_info()`.  Consolidated scan metadata from filter, event, s
 
 ### `ChromatogramData`
 
-Returned by `get_chromatogram()` and `get_chromatogram_ex()`.
+Returned by `get_chromatogram()`, `get_chromatogram_by_time()`, and `get_chromatogram_ex()`.
 
 | Field | Type | Description |
 |---|---|---|
@@ -578,6 +578,22 @@ Extract a single chromatogram trace.
 | `filter_string` | `str` | `""` | Restrict to scans matching this filter (see `get_filters()`) |
 
 .NET call: `GetChromatogramData`
+
+#### `get_chromatogram_by_time(start_time=-1.0, end_time=-1.0, trace_type="BasePeak", mass_range="", filter_string="") → ChromatogramData`
+
+Same as `get_chromatogram` but accepts retention times in minutes instead of
+scan numbers.  Times are converted to the nearest scan numbers via
+`ScanNumberFromRetentionTime` before the DLL call.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start_time` | `float` | `-1.0` | Start retention time in minutes (`-1` = start of file) |
+| `end_time` | `float` | `-1.0` | End retention time in minutes (`-1` = end of file) |
+| `trace_type` | `str` | `"BasePeak"` | Same values as `get_chromatogram` |
+| `mass_range` | `str` | `""` | Mass range for EIC, e.g. `"500.0-510.0"` |
+| `filter_string` | `str` | `""` | Restrict to scans matching this filter |
+
+.NET calls: `ScanNumberFromRetentionTime`, `GetChromatogramData`
 
 #### `get_chromatogram_ex(trace_type="BasePeak", mass_ranges=None, filter_string="", start_scan=-1, end_scan=-1) → ChromatogramData`
 

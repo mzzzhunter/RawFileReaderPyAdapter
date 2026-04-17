@@ -95,6 +95,67 @@ class ChromatogramsMixin:
         )
 
     # ------------------------------------------------------------------
+    # Chromatogram by retention time
+    # ------------------------------------------------------------------
+
+    def get_chromatogram_by_time(
+        self,
+        start_time: float = -1.0,
+        end_time: float = -1.0,
+        trace_type: str = "BasePeak",
+        mass_range: str = "",
+        filter_string: str = "",
+    ) -> ChromatogramData:
+        """
+        Extract a chromatogram trace using retention times (minutes) instead
+        of scan numbers.
+
+        The retention-time boundaries are converted to the nearest scan
+        numbers via ``ScanNumberFromRetentionTime`` before calling
+        ``GetChromatogramData``.
+
+        Parameters
+        ----------
+        start_time:
+            Start retention time in minutes.  Use ``-1`` for the start of
+            the file.
+        end_time:
+            End retention time in minutes.  Use ``-1`` for the end of the
+            file.
+        trace_type:
+            One of ``"BasePeak"``, ``"TIC"``, ``"MassRange"`` / ``"EIC"``,
+            ``"NeutralLoss"``, ``"UV"``, ``"PDA"``, ``"Analog"``.
+        mass_range:
+            Mass range for ``"MassRange"`` / ``"EIC"`` traces, e.g.
+            ``"500.0-510.0"``.
+        filter_string:
+            Scan filter string to restrict which scans contribute to the
+            chromatogram.  Use :meth:`get_filters` to list available filters.
+
+        Returns
+        -------
+        ChromatogramData
+        """
+        self._check_open()
+
+        file_start = float(self._raw_file.RunHeaderEx.StartTime)
+        file_end = float(self._raw_file.RunHeaderEx.EndTime)
+
+        t0 = start_time if start_time >= 0 else file_start
+        t1 = end_time if end_time >= 0 else file_end
+
+        s0 = int(self._raw_file.ScanNumberFromRetentionTime(t0))
+        s1 = int(self._raw_file.ScanNumberFromRetentionTime(t1))
+
+        return self.get_chromatogram(
+            trace_type=trace_type,
+            mass_range=mass_range,
+            start_scan=s0,
+            end_scan=s1,
+            filter_string=filter_string,
+        )
+
+    # ------------------------------------------------------------------
     # Extended chromatogram (GetChromatogramDataEx)
     # ------------------------------------------------------------------
 
