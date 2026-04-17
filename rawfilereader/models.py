@@ -10,17 +10,11 @@ from typing import List, Optional, Tuple
 
 @dataclass
 class FileInfo:
-    """Header-level metadata about the RAW file."""
+    """File-header-level metadata about the RAW file."""
     file_name: str
     creation_date: str
     operator: str
     comment: str
-    sample_name: str
-    sample_id: str
-    sample_type: str
-    vial: str
-    instrument_method: str
-    tune_method: str
     acquisition_software_version: str
     instrument_name: str
     instrument_serial_number: str
@@ -29,9 +23,46 @@ class FileInfo:
 
 
 @dataclass
+class SampleInfo:
+    """Full sample information record (SampleInformation in the .NET API)."""
+    sample_name: str
+    sample_id: str
+    sample_type: str
+    vial: str
+    comment: str
+    barcode: str
+    barcode_status: str
+    calibration_level: str
+    calibration_file: str
+    dilution_factor: float
+    injection_volume: float
+    istd_amount: float
+    row_number: int
+    sample_volume: float
+    sample_weight: float
+    path: str
+    processing_method_file: str
+    instrument_method_file: str
+    raw_file_name: str
+    user_text: List[str] = field(default_factory=list)
+
+
+@dataclass
+class AutoSamplerInfo:
+    """Autosampler tray and vial geometry (IAutoSamplerInformation in the .NET API)."""
+    tray_index: int
+    vial_index: int
+    vials_per_tray: int
+    vials_per_tray_x: int
+    vials_per_tray_y: int
+    tray_shape: str
+    tray_name: str
+
+
+@dataclass
 class InstrumentInfo:
     """Per-device instrument metadata."""
-    device_type: str        # e.g. "MS", "UV", "PDA", "Analog"
+    device_type: str
     instance_number: int
     name: str
     model: str
@@ -49,7 +80,7 @@ class ScanStats:
     start_time: float
     low_mass: float
     high_mass: float
-    tic: float                # total ion current
+    tic: float
     base_peak_mass: float
     base_peak_intensity: float
     packet_count: int
@@ -81,7 +112,6 @@ class CentroidData:
 class ProfileData:
     """Profile (raw) mass spectrum data, as segmented arrays."""
     scan_number: int
-    # Each segment is a (positions, intensities) pair
     segments: List[Tuple[List[float], List[float]]] = field(default_factory=list)
 
     @property
@@ -105,10 +135,10 @@ class ProfileData:
 class ScanInfo:
     """High-level metadata about a single scan."""
     scan_number: int
-    scan_filter: str            # e.g. "FTMS + p NSI Full ms [200.00-2000.00]"
-    ms_order: int               # 1 = MS1, 2 = MS2, …
-    retention_time: float       # minutes
-    injection_time: float       # ms
+    scan_filter: str
+    ms_order: int
+    retention_time: float
+    injection_time: float
     is_centroid: bool
     detector_type: str
     activation_type: str
@@ -123,7 +153,7 @@ class ScanInfo:
 @dataclass
 class ChromatogramData:
     """A single chromatogram trace."""
-    trace_type: str             # e.g. "BasePeak", "TIC", "MassRange"
+    trace_type: str
     mass_range: str
     times: List[float]
     intensities: List[float]
@@ -133,14 +163,14 @@ class ChromatogramData:
 class TrailerData:
     """Trailer-extra (auxiliary) data appended to a scan."""
     scan_number: int
-    fields: dict  # label -> value mapping
+    fields: dict
 
 
 @dataclass
 class StatusLogEntry:
     """One row from the instrument status log."""
     retention_time: float
-    fields: dict  # label -> value mapping
+    fields: dict
 
 
 @dataclass
@@ -156,8 +186,8 @@ class MassPrecision:
     mass: float
     intensity: float
     resolution: float
-    mz_accuracy_mass: float     # ppm
-    mz_accuracy_mmu: float      # mmu
+    mz_accuracy_mass: float
+    mz_accuracy_mmu: float
 
 
 @dataclass
@@ -167,6 +197,7 @@ class AveragedScan:
     last_scan: int
     masses: List[float]
     intensities: List[float]
+    time_range: Optional[Tuple[float, float]] = None
 
 
 @dataclass
@@ -174,11 +205,10 @@ class BackgroundSubtractedSpectrum:
     """
     Result of background subtraction using the Thermo Fisher BackgroundSubtractor.
 
-    Produced by :meth:`RawFileAdapter.subtract_background`.
     Requires ``ThermoFisher.CommonCore.BackgroundSubtraction.dll``.
     """
     scan_number: int
-    background_scans: List[int]   # scan numbers used as background
+    background_scans: List[int]
     scan_filter: str
     masses: List[float]
     intensities: List[float]
@@ -187,3 +217,19 @@ class BackgroundSubtractedSpectrum:
     def peaks(self) -> List[Tuple[float, float]]:
         """Return ``(mass, intensity)`` tuples for all peaks."""
         return list(zip(self.masses, self.intensities))
+
+
+@dataclass
+class TuneData:
+    """Instrument tune data for one tune segment."""
+    index: int
+    labels: List[str]
+    values: List[str]
+
+
+@dataclass
+class ErrorLogEntry:
+    """One entry from the instrument error log."""
+    index: int
+    retention_time: float
+    error_message: str

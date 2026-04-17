@@ -1,51 +1,68 @@
 """
 RawFileReader Python Adapter
 ============================
-A Python wrapper around the Thermo Fisher Scientific RawFileReader .NET assemblies.
-Uses pythonnet (clr) to bridge Python and .NET.
+A Python wrapper around the Thermo Fisher Scientific RawFileReader .NET
+assemblies.  Uses pythonnet (clr) to bridge Python and .NET.
 """
 
 from .adapter import RawFileAdapter
+from ._threading import RawFileThreadManager
 from .models import (
-    ScanInfo,
-    CentroidData,
-    ProfileData,
-    ChromatogramData,
-    InstrumentInfo,
-    FileInfo,
-    ScanStats,
-    TrailerData,
-    StatusLogEntry,
-    ScanDependent,
-    MassPrecision,
+    AveragedScan,
+    AutoSamplerInfo,
     BackgroundSubtractedSpectrum,
+    CentroidData,
+    ChromatogramData,
+    ErrorLogEntry,
+    FileInfo,
+    InstrumentInfo,
+    MassPrecision,
+    ProfileData,
+    SampleInfo,
+    ScanDependent,
+    ScanInfo,
+    ScanStats,
+    StatusLogEntry,
+    TrailerData,
+    TuneData,
 )
 from .exceptions import (
-    RawFileError,
-    RawFileNotOpenError,
-    RawFileInAcquisitionError,
+    AssemblyLoadError,
     InstrumentSelectionError,
+    RawFileError,
+    RawFileInAcquisitionError,
+    RawFileNotOpenError,
     ScanNotFoundError,
 )
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = [
+    # Classes
     "RawFileAdapter",
-    "ScanInfo",
-    "CentroidData",
-    "ProfileData",
-    "ChromatogramData",
-    "InstrumentInfo",
-    "FileInfo",
-    "ScanStats",
-    "TrailerData",
-    "StatusLogEntry",
-    "ScanDependent",
-    "MassPrecision",
+    "RawFileThreadManager",
+    # Models
+    "AveragedScan",
+    "AutoSamplerInfo",
     "BackgroundSubtractedSpectrum",
-    "RawFileError",
-    "RawFileNotOpenError",
-    "RawFileInAcquisitionError",
+    "CentroidData",
+    "ChromatogramData",
+    "ErrorLogEntry",
+    "FileInfo",
+    "InstrumentInfo",
+    "MassPrecision",
+    "ProfileData",
+    "SampleInfo",
+    "ScanDependent",
+    "ScanInfo",
+    "ScanStats",
+    "StatusLogEntry",
+    "TrailerData",
+    "TuneData",
+    # Exceptions
+    "AssemblyLoadError",
     "InstrumentSelectionError",
+    "RawFileError",
+    "RawFileInAcquisitionError",
+    "RawFileNotOpenError",
     "ScanNotFoundError",
 ]
