@@ -42,8 +42,114 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 |---|---|
 | Python | ≥ 3.8 |
 | pythonnet | ≥ 3.0.3 |
-| .NET Runtime | ≥ 6.0 (for `NetCore` DLLs) or .NET Framework ≥ 4.5.1 |
+| .NET Runtime | 8.0 |
 | RawFileReader DLLs | Latest from [thermofisherlsms/RawFileReader](https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs) |
+
+### .NET 8 Runtime Installation
+
+Install the .NET 8 runtime for your operating system before using this package.
+
+---
+
+#### Ubuntu / Debian (including Google Colab)
+
+```bash
+# 1. Register the Microsoft package feed
+wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb \
+     -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+rm packages-microsoft-prod.deb
+
+# 2. Install the .NET 8 runtime
+sudo apt-get update && sudo apt-get install -y dotnet-runtime-8.0
+```
+
+> **Google Colab:** prefix each command with `!` and drop `sudo` (the Colab
+> runtime already runs as root):
+> ```bash
+> !wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb \
+>      -O packages-microsoft-prod.deb
+> !dpkg -i packages-microsoft-prod.deb
+> !rm packages-microsoft-prod.deb
+> !apt-get update && apt-get install -y dotnet-runtime-8.0
+> ```
+
+---
+
+#### RHEL / CentOS Stream / Fedora
+
+```bash
+sudo dnf install -y dotnet-runtime-8.0
+```
+
+---
+
+#### macOS
+
+**Option A — Homebrew (recommended)**
+
+```bash
+brew install dotnet@8
+echo 'export PATH="$(brew --prefix dotnet@8)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Option B — Official installer**
+
+Download the **.NET 8 Runtime** `.pkg` from
+[https://dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0),
+run the installer, then open a new terminal.
+
+---
+
+#### Windows
+
+**Option A — winget (Windows 10 / 11)**
+
+```
+winget install Microsoft.DotNet.Runtime.8
+```
+
+Open a new terminal after installation.
+
+**Option B — Official installer**
+
+Download the **.NET 8 Runtime** `.exe` from
+[https://dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0),
+run the installer, then restart your terminal.
+
+---
+
+#### Verify the .NET installation
+
+Run this in your terminal (or Colab cell with `!`) after installation:
+
+```bash
+dotnet --list-runtimes
+```
+
+You should see a line containing `Microsoft.NETCore.App 8.0`:
+
+```
+Microsoft.NETCore.App 8.0.x [/usr/lib/dotnet/shared/Microsoft.NETCore.App]
+```
+
+Then verify that `pythonnet` can reach the runtime:
+
+```python
+import clr
+print("pythonnet OK — CLR version:", clr.__version__)
+```
+
+If `import clr` raises an error, .NET was likely not on the `PATH` when
+`pythonnet` was installed.  Fix it by reinstalling `pythonnet` after .NET
+is available:
+
+```bash
+pip install --force-reinstall pythonnet
+```
+
+---
 
 ### Required DLLs
 
