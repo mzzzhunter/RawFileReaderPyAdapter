@@ -12,6 +12,33 @@ from .models import AveragedScan, BackgroundSubtractedSpectrum
 from .exceptions import AssemblyLoadError
 
 
+def _reflect_call(obj, method_name, *args):
+    """
+    Invoke a .NET instance method via reflection.
+
+    pythonnet 3.x interface proxies only expose methods declared on the
+    specific interface type.  Averaging methods live on the concrete
+    RawFile class, not on the IRawDataPlus / IRawDataExtended proxy, so
+    they are unreachable via normal attribute access.  Calling through
+    GetType().GetMethods() + Invoke() goes to the concrete runtime type
+    and always finds the method.
+    """
+    import System  # type: ignore
+    nargs = len(args)
+    method = next(
+        (m for m in obj.GetType().GetMethods()
+         if m.Name == method_name and m.GetParameters().Length == nargs),
+        None,
+    )
+    if method is None:
+        raise AttributeError(
+            f"'{obj.GetType().Name}' has no public method "
+            f"'{method_name}' with {nargs} parameter(s)"
+        )
+    arg_array = System.Array[System.Object](list(args))
+    return method.Invoke(obj, arg_array)
+
+
 class AveragingMixin:
     """Methods wrapping scan-averaging and subtraction DLL calls."""
 
@@ -41,9 +68,9 @@ class AveragingMixin:
         opts = MassOptions()
         if filter_string:
             filt = self._raw_file.GetFilterForScanNumber(first_scan)
-            avg = self._raw_file.AverageScansInScanRange(first_scan, last_scan, filt, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, filt, opts)
         else:
-            avg = self._raw_file.AverageScansInScanRange(first_scan, last_scan, None, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, None, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
@@ -79,7 +106,7 @@ class AveragingMixin:
         for s in scan_numbers:
             dn_list.Add(Int32(s))
 
-        avg = self._raw_file.AverageScans(dn_list, opts)
+        avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
@@ -120,9 +147,9 @@ class AveragingMixin:
         if filter_string:
             first, _ = self.get_scan_range()
             filt = self._raw_file.GetFilterForScanNumber(first)
-            avg = self._raw_file.AverageScansInTimeRange(start_time, end_time, filt, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, filt, opts)
         else:
-            avg = self._raw_file.AverageScansInTimeRange(start_time, end_time, None, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, None, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
@@ -199,7 +226,7 @@ class AveragingMixin:
                 dn_list.Add(Int32(s))
             from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
             opts = MassOptions()
-            bg_centroid = self._raw_file.AverageScans(dn_list, opts)
+            bg_centroid = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
 
         result = BackgroundSubtractor().SubtractBackground(fg_centroid, bg_centroid)
 
