@@ -18,23 +18,43 @@ def _reflect_call(obj, method_name, *args):
 
     pythonnet 3.x interface proxies only expose methods declared on the
     specific interface type.  Averaging methods live on the concrete
-    RawFile class, not on the IRawDataPlus / IRawDataExtended proxy, so
-    they are unreachable via normal attribute access.  Calling through
-    GetType().GetMethods() + Invoke() goes to the concrete runtime type
-    and always finds the method.
+    RawFileAccess class, not on the IRawDataPlus / IRawDataExtended proxy,
+    so they are unreachable via normal attribute access.
+
+    Explicit interface implementations are non-public in .NET reflection
+    and carry a fully-qualified name (e.g. ``IRawDataPlus.AverageScans``),
+    so we first search public methods, then widen to non-public + name
+    suffix matching to find explicit implementations.
     """
     import System  # type: ignore
+    from System.Reflection import BindingFlags  # type: ignore
+
     nargs = len(args)
+
+    # Pass 1 — public methods only
     method = next(
         (m for m in obj.GetType().GetMethods()
          if m.Name == method_name and m.GetParameters().Length == nargs),
         None,
     )
+
+    # Pass 2 — include non-public; match on name suffix for explicit
+    # interface implementations (name = "Namespace.IFace.MethodName")
+    if method is None:
+        all_flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+        method = next(
+            (m for m in obj.GetType().GetMethods(all_flags)
+             if (m.Name == method_name or m.Name.endswith("." + method_name))
+             and m.GetParameters().Length == nargs),
+            None,
+        )
+
     if method is None:
         raise AttributeError(
-            f"'{obj.GetType().Name}' has no public method "
-            f"'{method_name}' with {nargs} parameter(s)"
+            f"'{obj.GetType().Name}' has no method '{method_name}' "
+            f"with {nargs} parameter(s)"
         )
+
     arg_array = System.Array[System.Object](list(args))
     return method.Invoke(obj, arg_array)
 
