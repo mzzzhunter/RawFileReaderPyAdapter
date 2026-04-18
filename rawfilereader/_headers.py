@@ -13,17 +13,15 @@ from .exceptions import AssemblyLoadError, InstrumentSelectionError
 
 _OPENMCDF_MSG = (
     "Instrument method access requires OpenMcdf.dll, which is not included "
-    "in the standard RawFileReader distribution.  Download it from NuGet "
-    "(package 'OpenMcdf') and place it alongside the other DLLs."
+    "in the Thermo Fisher RawFileReader distribution and is not supported "
+    "by this adapter."
 )
 
 def _wrap_openmcdf(fn):
     try:
         return fn()
     except Exception as exc:
-        if "OpenMcdf" in str(exc):
-            raise AssemblyLoadError(_OPENMCDF_MSG) from exc
-        raise
+        raise AssemblyLoadError(_OPENMCDF_MSG) from exc
 
 
 class HeadersMixin:

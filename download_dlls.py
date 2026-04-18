@@ -9,7 +9,6 @@ Usage
 -----
     python download_dlls.py
     python download_dlls.py --libs-dir /opt/thermo/libs
-    python download_dlls.py --include-optional   # also downloads BackgroundSubtraction.dll
     python download_dlls.py --no-env             # skip environment variable setup
 """
 
@@ -34,9 +33,6 @@ _REQUIRED_DLLS = [
     "ThermoFisher.CommonCore.Data.dll",
     "ThermoFisher.CommonCore.RawFileReader.dll",
     "ThermoFisher.CommonCore.MassPrecisionEstimator.dll",
-]
-
-_OPTIONAL_DLLS = [
     "ThermoFisher.CommonCore.BackgroundSubtraction.dll",
 ]
 
@@ -184,11 +180,6 @@ def main() -> None:
         help="Directory to place the DLLs in (default: ./libs next to this script)",
     )
     parser.add_argument(
-        "--include-optional",
-        action="store_true",
-        help="Also download ThermoFisher.CommonCore.BackgroundSubtraction.dll",
-    )
-    parser.add_argument(
         "--no-env",
         action="store_true",
         help="Skip writing RAWFILEREADER_LIBS to the shell config file",
@@ -198,22 +189,17 @@ def main() -> None:
     libs_dir = Path(args.libs_dir).resolve()
     libs_dir.mkdir(parents=True, exist_ok=True)
 
-    dlls_to_download = _REQUIRED_DLLS + (
-        _OPTIONAL_DLLS if args.include_optional else []
-    )
-
     # Discover the default branch once (avoids hardcoding 'main' vs 'master')
     print("Resolving repository branch...", end=" ", flush=True)
     branch = _default_branch()
     print(branch)
 
     print(f"Destination : {libs_dir}")
-    print(f"DLLs        : {len(dlls_to_download)} "
-          f"({'including optional' if args.include_optional else 'required only'})")
+    print(f"DLLs        : {len(_REQUIRED_DLLS)}")
     print()
 
     failed = []
-    for dll_name in dlls_to_download:
+    for dll_name in _REQUIRED_DLLS:
         dest = libs_dir / dll_name
         if dest.exists():
             print(f"  {dll_name}: already present, skipping.")
