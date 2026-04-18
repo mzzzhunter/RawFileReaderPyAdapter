@@ -92,13 +92,12 @@ class RawFileThreadManager:
                 "RawFileReader assembly not loaded."
             ) from exc
 
-        raw = RawFileReaderAdapter.FileFactory(self._path)
-        if not raw.IsOpen:
+        thread_mgr = RawFileReaderAdapter.ThreadedFileFactory(self._path)
+        if not thread_mgr.IsOpen:
             raise RawFileNotOpenError(
                 f"RawFileReader could not open: {self._path}"
             )
-        from ThermoFisher.CommonCore.Data.Interfaces import IRawFileThreadManager  # type: ignore
-        self._thread_manager = IRawFileThreadManager(raw)
+        self._thread_manager = thread_mgr
 
     def close(self) -> None:
         """Close the thread manager and release .NET resources."""
@@ -115,9 +114,10 @@ class RawFileThreadManager:
         Create a thread-safe reader for one thread.
 
         Each returned :class:`~rawfilereader.adapter.RawFileAdapter` wraps
-        an independent ``.NET IRawDataPlus`` accessor obtained via
-        ``CreateThreadAccessor()``.  Only one thread should use a given
-        accessor at a time.
+        an independent ``IRawDataPlus`` accessor obtained via
+        ``CreateThreadAccessor()``, cast to ``IRawDataPlus`` so all API
+        methods are available.  Only one thread should use a given accessor
+        at a time.
 
         Returns
         -------
@@ -136,10 +136,10 @@ class RawFileThreadManager:
             )
 
         from .adapter import RawFileAdapter  # local import to avoid circular
-
-        accessor_raw = self._thread_manager.CreateThreadAccessor()
-
+        from ThermoFisher.CommonCore.Data.Interfaces import IRawDataPlus  # type: ignore
         from ThermoFisher.CommonCore.Data.Business import Device  # type: ignore
+
+        accessor_raw = IRawDataPlus(self._thread_manager.CreateThreadAccessor())
 
         adapter = RawFileAdapter.__new__(RawFileAdapter)
         adapter._path = self._path

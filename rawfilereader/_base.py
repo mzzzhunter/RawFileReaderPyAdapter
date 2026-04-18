@@ -121,7 +121,8 @@ class RawFileBase:
                 f"File is still being acquired: {self._path}"
             )
 
-        self._raw_file = raw
+        from ThermoFisher.CommonCore.Data.Interfaces import IRawDataPlus  # type: ignore
+        self._raw_file = IRawDataPlus(raw)
         self._device_enum = Device
         self.select_instrument(self._instrument_type, self._instrument_instance)
 

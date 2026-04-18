@@ -422,9 +422,11 @@ class ScansMixin:
             ) from exc
 
         centroid_stream = self._raw_file.GetCentroidStream(scan_number, False)
+        from ThermoFisher.CommonCore.Data.Interfaces import ICentroidStream  # type: ignore
+        centroid_iface = ICentroidStream(centroid_stream)
         estimator = PrecisionEstimate()
         estimates = estimator.GetMassPrecisionEstimate(
-            centroid_stream, self._raw_file, scan_number
+            centroid_iface, self._raw_file, scan_number
         )
 
         return [
