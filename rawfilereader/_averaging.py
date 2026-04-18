@@ -187,13 +187,10 @@ class AveragingMixin:
             ) from exc
 
         scan_filter = str(self._raw_file.GetFilterForScanNumber(scan_number))
-        from ThermoFisher.CommonCore.Data.Interfaces import ICentroidStream  # type: ignore
-        fg_centroid = ICentroidStream(self._raw_file.GetCentroidStream(scan_number, False))
+        fg_centroid = self._raw_file.GetCentroidStream(scan_number, False)
 
         if len(background_scan_numbers) == 1:
-            bg_centroid = ICentroidStream(
-                self._raw_file.GetCentroidStream(background_scan_numbers[0], False)
-            )
+            bg_centroid = self._raw_file.GetCentroidStream(background_scan_numbers[0], False)
         else:
             from System.Collections.Generic import List as DotNetList  # type: ignore
             from System import Int32  # type: ignore
@@ -202,7 +199,7 @@ class AveragingMixin:
                 dn_list.Add(Int32(s))
             from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
             opts = MassOptions()
-            bg_centroid = ICentroidStream(self._raw_file.AverageScans(dn_list, opts))
+            bg_centroid = self._raw_file.AverageScans(dn_list, opts)
 
         result = BackgroundSubtractor().SubtractBackground(fg_centroid, bg_centroid)
 
