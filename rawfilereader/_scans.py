@@ -421,9 +421,8 @@ class ScansMixin:
                 "Ensure ThermoFisher.CommonCore.MassPrecisionEstimator.dll is present."
             ) from exc
 
-        scan = self._raw_file.GetCentroidStream(scan_number, False)
         estimates = PrecisionEstimate.GetMassPrecisionEstimate(
-            scan, self._raw_file, scan_number
+            self._raw_file, scan_number
         )
 
         return [
