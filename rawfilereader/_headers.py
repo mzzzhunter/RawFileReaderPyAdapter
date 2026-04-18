@@ -9,19 +9,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from .models import AutoSamplerInfo, FileInfo, InstrumentInfo, SampleInfo
-from .exceptions import AssemblyLoadError, InstrumentSelectionError
-
-_OPENMCDF_MSG = (
-    "Instrument method access requires OpenMcdf.dll, which is not included "
-    "in the Thermo Fisher RawFileReader distribution and is not supported "
-    "by this adapter."
-)
-
-def _wrap_openmcdf(fn):
-    try:
-        return fn()
-    except Exception as exc:
-        raise AssemblyLoadError(_OPENMCDF_MSG) from exc
+from .exceptions import InstrumentSelectionError
 
 
 class HeadersMixin:
@@ -75,30 +63,6 @@ class HeadersMixin:
         """Return the device-type string for the given 0-based *index*."""
         self._check_open()
         return str(self._raw_file.GetInstrumentType(index))
-
-    def get_instrument_method_count(self) -> int:
-        """Return the number of instrument methods embedded in the file."""
-        self._check_open()
-        return _wrap_openmcdf(lambda: int(self._raw_file.InstrumentMethodsCount))
-
-    def get_instrument_method(self, index: int = 0) -> str:
-        """
-        Return the text of the instrument method at *index*.
-
-        Parameters
-        ----------
-        index:
-            0-based method index.
-        """
-        self._check_open()
-        return _wrap_openmcdf(lambda: str(self._raw_file.GetInstrumentMethod(index)))
-
-    def get_all_instrument_names_from_method(self) -> List[str]:
-        """Return the list of instrument names embedded in the method."""
-        self._check_open()
-        return _wrap_openmcdf(
-            lambda: [str(n) for n in self._raw_file.GetAllInstrumentNamesFromInstrumentMethod()]
-        )
 
     # ------------------------------------------------------------------
     # Run header
