@@ -198,7 +198,7 @@ class AveragingMixin:
             for s in background_scan_numbers:
                 dn_list.Add(Int32(s))
             from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
-        opts = MassOptions()
+            opts = MassOptions()
             bg_centroid = self._raw_file.AverageScans(dn_list, opts)
 
         result = BackgroundSubtractor().Subtract(fg_centroid, bg_centroid)
