@@ -256,7 +256,7 @@ class ScansMixin:
         file (wraps ``GetAutoFilters``).
         """
         self._check_open()
-        return [f.ToString() for f in self._raw_file.GetAutoFilters()]
+        return [str(f) for f in self._raw_file.GetAutoFilters()]
 
     def get_filter_for_scan(self, scan_number: int) -> str:
         """Return the scan-filter string for *scan_number*."""
@@ -421,9 +421,10 @@ class ScansMixin:
                 "Ensure ThermoFisher.CommonCore.MassPrecisionEstimator.dll is present."
             ) from exc
 
+        centroid_stream = self._raw_file.GetCentroidStream(scan_number, False)
         estimator = PrecisionEstimate()
         estimates = estimator.GetMassPrecisionEstimate(
-            self._raw_file, scan_number
+            centroid_stream, self._raw_file, scan_number
         )
 
         return [

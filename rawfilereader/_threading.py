@@ -97,7 +97,8 @@ class RawFileThreadManager:
             raise RawFileNotOpenError(
                 f"RawFileReader could not open: {self._path}"
             )
-        self._thread_manager = raw
+        from ThermoFisher.CommonCore.Data.Interfaces import IRawFileThreadManager  # type: ignore
+        self._thread_manager = IRawFileThreadManager(raw)
 
     def close(self) -> None:
         """Close the thread manager and release .NET resources."""

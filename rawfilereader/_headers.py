@@ -9,7 +9,21 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from .models import AutoSamplerInfo, FileInfo, InstrumentInfo, SampleInfo
-from .exceptions import InstrumentSelectionError
+from .exceptions import AssemblyLoadError, InstrumentSelectionError
+
+_OPENMCDF_MSG = (
+    "Instrument method access requires OpenMcdf.dll, which is not included "
+    "in the standard RawFileReader distribution.  Download it from NuGet "
+    "(package 'OpenMcdf') and place it alongside the other DLLs."
+)
+
+def _wrap_openmcdf(fn):
+    try:
+        return fn()
+    except Exception as exc:
+        if "OpenMcdf" in str(exc):
+            raise AssemblyLoadError(_OPENMCDF_MSG) from exc
+        raise
 
 
 class HeadersMixin:
@@ -67,7 +81,7 @@ class HeadersMixin:
     def get_instrument_method_count(self) -> int:
         """Return the number of instrument methods embedded in the file."""
         self._check_open()
-        return int(self._raw_file.InstrumentMethodsCount)
+        return _wrap_openmcdf(lambda: int(self._raw_file.InstrumentMethodsCount))
 
     def get_instrument_method(self, index: int = 0) -> str:
         """
@@ -79,12 +93,14 @@ class HeadersMixin:
             0-based method index.
         """
         self._check_open()
-        return str(self._raw_file.GetInstrumentMethod(index))
+        return _wrap_openmcdf(lambda: str(self._raw_file.GetInstrumentMethod(index)))
 
     def get_all_instrument_names_from_method(self) -> List[str]:
         """Return the list of instrument names embedded in the method."""
         self._check_open()
-        return [str(n) for n in self._raw_file.GetAllInstrumentNamesFromInstrumentMethod()]
+        return _wrap_openmcdf(
+            lambda: [str(n) for n in self._raw_file.GetAllInstrumentNamesFromInstrumentMethod()]
+        )
 
     # ------------------------------------------------------------------
     # Run header

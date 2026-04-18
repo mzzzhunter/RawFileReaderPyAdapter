@@ -37,7 +37,8 @@ class AveragingMixin:
             Pass ``None`` to average all scan types in the range.
         """
         self._check_open()
-        opts = self._raw_file.DefaultMassOptions()
+        from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        opts = MassOptions()
         if filter_string:
             filt = self._raw_file.GetFilterForScanNumber(first_scan)
             avg = self._raw_file.AverageScansInScanRange(first_scan, last_scan, filt, opts)
@@ -68,7 +69,8 @@ class AveragingMixin:
             List of 1-based scan numbers to average.
         """
         self._check_open()
-        opts = self._raw_file.DefaultMassOptions()
+        from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        opts = MassOptions()
 
         from System.Collections.Generic import List as DotNetList  # type: ignore
         from System import Int32  # type: ignore
@@ -112,7 +114,8 @@ class AveragingMixin:
             Optional scan-filter to restrict which scans are averaged.
         """
         self._check_open()
-        opts = self._raw_file.DefaultMassOptions()
+        from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        opts = MassOptions()
 
         if filter_string:
             first, _ = self.get_scan_range()
@@ -194,7 +197,8 @@ class AveragingMixin:
             dn_list = DotNetList[Int32]()
             for s in background_scan_numbers:
                 dn_list.Add(Int32(s))
-            opts = self._raw_file.DefaultMassOptions()
+            from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        opts = MassOptions()
             bg_centroid = self._raw_file.AverageScans(dn_list, opts)
 
         result = BackgroundSubtractor().Subtract(fg_centroid, bg_centroid)
