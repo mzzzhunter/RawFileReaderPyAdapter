@@ -90,7 +90,7 @@ class AveragingMixin:
             filt = self._raw_file.GetFilterForScanNumber(first_scan)
             avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, filt, opts)
         else:
-            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, None, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
@@ -169,7 +169,7 @@ class AveragingMixin:
             filt = self._raw_file.GetFilterForScanNumber(first)
             avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, filt, opts)
         else:
-            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, None, opts)
+            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []

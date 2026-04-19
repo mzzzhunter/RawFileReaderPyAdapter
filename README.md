@@ -918,6 +918,40 @@ with RawFileAdapter("sample.raw") as rf:
             print(f"{mass:12.4f}  {intensity:14.0f}")
 ```
 
+### Example 11 – Average a background region, then subtract it
+
+Requires `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs directory.
+
+```python
+from rawfilereader import RawFileAdapter, AssemblyLoadError
+
+with RawFileAdapter("sample.raw") as rf:
+    bg_start = rf.scan_number_from_retention_time(0.5)
+    bg_end   = rf.scan_number_from_retention_time(1.0)
+    fg_scan  = rf.scan_number_from_retention_time(5.2)
+
+    # inspect the averaged background before subtraction
+    bg_avg = rf.average_scans_in_range(bg_start, bg_end)
+    print(f"Background: scans {bg_avg.first_scan}–{bg_avg.last_scan}, {len(bg_avg.masses)} peaks")
+    for m, i in zip(bg_avg.masses[:5], bg_avg.intensities[:5]):
+        print(f"  {m:.4f}  {i:.2e}")
+
+    # subtract that background from the foreground scan
+    try:
+        result = rf.subtract_background(
+            scan_number=fg_scan,
+            background_scan_numbers=list(range(bg_start, bg_end + 1)),
+            mass_range=(200.0, 2000.0),
+        )
+    except AssemblyLoadError as e:
+        print(f"BackgroundSubtraction DLL not available: {e}")
+    else:
+        print(f"Foreground scan {result.scan_number}: {len(result.peaks)} peaks after BG removal")
+        print(f"\n{'m/z':>12}  {'Intensity':>14}")
+        for mass, intensity in result.peaks[:10]:
+            print(f"{mass:12.4f}  {intensity:14.0f}")
+```
+
 ---
 
 ## License
