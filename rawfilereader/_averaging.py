@@ -85,12 +85,22 @@ class AveragingMixin:
         """
         self._check_open()
         from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        from System.Collections.Generic import List as DotNetList  # type: ignore
+        from System import Int32  # type: ignore
+
         opts = MassOptions()
+
         if filter_string:
-            filt = self._raw_file.GetFilterForScanNumber(first_scan)
-            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, filt, opts)
+            scan_list = [s for s in self.get_filtered_scan_numbers(filter_string)
+                         if first_scan <= s <= last_scan]
         else:
-            avg = _reflect_call(self._raw_file, "AverageScansInScanRange", first_scan, last_scan, opts)
+            scan_list = list(range(first_scan, last_scan + 1))
+
+        dn_list = DotNetList[Int32]()
+        for s in scan_list:
+            dn_list.Add(Int32(s))
+
+        avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
 
         masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
         intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
@@ -151,8 +161,6 @@ class AveragingMixin:
         """
         Average scans within a retention-time window.
 
-        Wraps ``AverageScansInTimeRange``.
-
         Parameters
         ----------
         start_time, end_time:
@@ -162,20 +170,27 @@ class AveragingMixin:
         """
         self._check_open()
         from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        from System.Collections.Generic import List as DotNetList  # type: ignore
+        from System import Int32  # type: ignore
+
         opts = MassOptions()
-
-        if filter_string:
-            first, _ = self.get_scan_range()
-            filt = self._raw_file.GetFilterForScanNumber(first)
-            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, filt, opts)
-        else:
-            avg = _reflect_call(self._raw_file, "AverageScansInTimeRange", start_time, end_time, opts)
-
-        masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
-        intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
 
         first_scan = int(self._raw_file.ScanNumberFromRetentionTime(start_time))
         last_scan = int(self._raw_file.ScanNumberFromRetentionTime(end_time))
+
+        if filter_string:
+            scan_list = self.get_filtered_scan_numbers_over_time(filter_string, start_time, end_time)
+        else:
+            scan_list = list(range(first_scan, last_scan + 1))
+
+        dn_list = DotNetList[Int32]()
+        for s in scan_list:
+            dn_list.Add(Int32(s))
+
+        avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
+
+        masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
+        intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
 
         return AveragedScan(
             first_scan=first_scan,
