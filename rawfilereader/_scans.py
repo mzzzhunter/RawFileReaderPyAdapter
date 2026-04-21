@@ -7,7 +7,7 @@ events, filtered enumerators, dependents, and mass precision.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Generator, List, Optional
 
 from .models import (
     CentroidData,
@@ -321,6 +321,38 @@ class ScansMixin:
             filt, start_time, end_time
         )]
 
+    def iterate_filtered_scans(
+        self,
+        filter_string: str,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+    ) -> Generator[int, None, None]:
+        """
+        Yield scan numbers matching *filter_string*, lazily.
+
+        Unlike :meth:`get_filtered_scan_numbers` (which materialises the full
+        list), this generator pulls one scan number at a time from the .NET
+        enumerator, making it suitable for very large files.
+
+        Parameters
+        ----------
+        filter_string:
+            Scan filter string to match.
+        start_time, end_time:
+            Optional retention-time window in minutes.  When both are
+            provided the time-range enumerator is used.
+        """
+        self._check_open()
+        filt = self._raw_file.GetFilterFromString(filter_string)
+        if start_time is not None and end_time is not None:
+            enumerator = self._raw_file.GetFilteredScanEnumeratorOverTime(
+                filt, start_time, end_time
+            )
+        else:
+            enumerator = self._raw_file.GetFilteredScanEnumerator(filt)
+        for scan_no in enumerator:
+            yield int(scan_no)
+
     # ------------------------------------------------------------------
     # Scan events
     # ------------------------------------------------------------------
@@ -432,7 +464,7 @@ class ScansMixin:
                 mass=float(e.Mass),
                 intensity=float(e.Intensity),
                 resolution=float(e.Resolution),
-                mz_accuracy_mass=float(e.MZAccuracyInPPM),
+                mz_accuracy_ppm=float(e.MZAccuracyInPPM),
                 mz_accuracy_mmu=float(e.MZAccuracyInMMU),
             )
             for e in estimates

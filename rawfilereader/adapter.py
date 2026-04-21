@@ -13,6 +13,7 @@ The adapter is composed from focused mixin classes:
 - :class:`~rawfilereader._chromatograms.ChromatogramsMixin` — chromatograms
 - :class:`~rawfilereader._logs.LogsMixin` — status/tune/error logs, trailer
 - :class:`~rawfilereader._averaging.AveragingMixin` — scan averaging/subtraction
+- :class:`~rawfilereader._methods.MethodsMixin` — instrument method text
 
 Usage
 -----
@@ -27,6 +28,7 @@ from ._base import RawFileBase
 from ._chromatograms import ChromatogramsMixin
 from ._headers import HeadersMixin
 from ._logs import LogsMixin
+from ._methods import MethodsMixin
 from ._scans import ScansMixin
 
 
@@ -37,6 +39,7 @@ class RawFileAdapter(
     ChromatogramsMixin,
     LogsMixin,
     AveragingMixin,
+    MethodsMixin,
 ):
     """
     Python adapter for reading Thermo Scientific RAW files via RawFileReader.

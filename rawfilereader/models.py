@@ -20,6 +20,17 @@ class FileInfo:
     instrument_serial_number: str
     number_of_ms_orders: int
     has_ms_data: bool
+    # Optional extended fields from IFileHeader / IRawDataProperties
+    file_description: Optional[str] = None
+    file_type: Optional[str] = None
+    revision: Optional[int] = None
+    modified_date: Optional[str] = None
+    computer_name: Optional[str] = None
+    path: Optional[str] = None
+    who_created_logon: Optional[str] = None
+    who_modified_logon: Optional[str] = None
+    number_of_times_calibrated: Optional[int] = None
+    number_of_times_modified: Optional[int] = None
 
 
 @dataclass
@@ -186,7 +197,7 @@ class MassPrecision:
     mass: float
     intensity: float
     resolution: float
-    mz_accuracy_mass: float
+    mz_accuracy_ppm: float
     mz_accuracy_mmu: float
 
 
@@ -232,4 +243,46 @@ class ErrorLogEntry:
     """One entry from the instrument error log."""
     index: int
     retention_time: float
+    error_message: str
+
+
+@dataclass
+class RunHeaderInfo:
+    """
+    Extended run-header metadata (IRunHeader / IRunHeaderAccess).
+
+    Returned by :meth:`~rawfilereader.RawFileAdapter.get_run_header_info`.
+    """
+    first_scan: int
+    last_scan: int
+    start_time: float
+    end_time: float
+    low_mass: float
+    high_mass: float
+    mass_resolution: float
+    max_intensity: float
+    max_integrated_intensity: float
+    spectra_count: int
+    status_log_count: int
+    error_log_count: int
+    trailer_extra_count: int
+    tune_data_count: int
+    expected_run_time: float
+    comment1: str
+    comment2: str
+    in_acquisition: bool
+    tolerance_unit: str
+    filter_mass_precision: Optional[int] = None
+    writer_protocol: Optional[int] = None
+
+
+@dataclass
+class RawFileError:
+    """
+    Detailed error information from IRawDataPlus.FileError.
+
+    Returned by :meth:`~rawfilereader.RawFileAdapter.get_file_error`.
+    """
+    has_error: bool
+    error_code: int
     error_message: str

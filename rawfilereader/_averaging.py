@@ -59,6 +59,13 @@ def _reflect_call(obj, method_name, *args):
     return method.Invoke(obj, arg_array)
 
 
+def _extract_preferred(avg) -> Tuple[List[float], List[float]]:
+    """Pull masses and intensities out of an averaged Scan object."""
+    masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
+    intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+    return masses, intensities
+
+
 class AveragingMixin:
     """Methods wrapping scan-averaging and subtraction DLL calls."""
 
@@ -90,6 +97,24 @@ class AveragingMixin:
 
         opts = MassOptions()
 
+        # Try the native 4-arg DLL call first (IScanAveragePlus.AverageScansInScanRange).
+        # The filter string is required by that overload; an empty string selects all types.
+        try:
+            avg = _reflect_call(
+                self._raw_file, "AverageScansInScanRange",
+                first_scan, last_scan, filter_string or "", opts,
+            )
+            masses, intensities = _extract_preferred(avg)
+            return AveragedScan(
+                first_scan=first_scan,
+                last_scan=last_scan,
+                masses=masses,
+                intensities=intensities,
+            )
+        except AttributeError:
+            pass
+
+        # Fallback: build the scan list in Python and call AverageScans.
         if filter_string:
             scan_list = [s for s in self.get_filtered_scan_numbers(filter_string)
                          if first_scan <= s <= last_scan]
@@ -101,9 +126,7 @@ class AveragingMixin:
             dn_list.Add(Int32(s))
 
         avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
-
-        masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
-        intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+        masses, intensities = _extract_preferred(avg)
 
         return AveragedScan(
             first_scan=first_scan,
@@ -127,19 +150,16 @@ class AveragingMixin:
         """
         self._check_open()
         from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
-        opts = MassOptions()
-
         from System.Collections.Generic import List as DotNetList  # type: ignore
         from System import Int32  # type: ignore
 
+        opts = MassOptions()
         dn_list = DotNetList[Int32]()
         for s in scan_numbers:
             dn_list.Add(Int32(s))
 
         avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
-
-        masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
-        intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+        masses, intensities = _extract_preferred(avg)
 
         return AveragedScan(
             first_scan=min(scan_numbers),
@@ -178,6 +198,24 @@ class AveragingMixin:
         first_scan = int(self._raw_file.ScanNumberFromRetentionTime(start_time))
         last_scan = int(self._raw_file.ScanNumberFromRetentionTime(end_time))
 
+        # Try the native 4-arg DLL call first (IScanAveragePlus.AverageScansInTimeRange).
+        try:
+            avg = _reflect_call(
+                self._raw_file, "AverageScansInTimeRange",
+                start_time, end_time, filter_string or "", opts,
+            )
+            masses, intensities = _extract_preferred(avg)
+            return AveragedScan(
+                first_scan=first_scan,
+                last_scan=last_scan,
+                masses=masses,
+                intensities=intensities,
+                time_range=(start_time, end_time),
+            )
+        except AttributeError:
+            pass
+
+        # Fallback: build the scan list in Python and call AverageScans.
         if filter_string:
             scan_list = self.get_filtered_scan_numbers_over_time(filter_string, start_time, end_time)
         else:
@@ -188,9 +226,7 @@ class AveragingMixin:
             dn_list.Add(Int32(s))
 
         avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
-
-        masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
-        intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+        masses, intensities = _extract_preferred(avg)
 
         return AveragedScan(
             first_scan=first_scan,
@@ -256,12 +292,11 @@ class AveragingMixin:
         else:
             from System.Collections.Generic import List as DotNetList  # type: ignore
             from System import Int32  # type: ignore
+            from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
             dn_list = DotNetList[Int32]()
             for s in background_scan_numbers:
                 dn_list.Add(Int32(s))
-            from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
-            opts = MassOptions()
-            bg_centroid = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
+            bg_centroid = _reflect_call(self._raw_file, "AverageScans", dn_list, MassOptions())
 
         result = BackgroundSubtractor().SubtractBackground(fg_centroid, bg_centroid)
 
@@ -277,6 +312,67 @@ class AveragingMixin:
         return BackgroundSubtractedSpectrum(
             scan_number=scan_number,
             background_scans=list(background_scan_numbers),
+            scan_filter=scan_filter,
+            masses=masses,
+            intensities=intensities,
+        )
+
+    def subtract_scans(
+        self,
+        foreground_scan: int,
+        background_scan: int,
+        mass_range: Optional[Tuple[float, float]] = None,
+    ) -> BackgroundSubtractedSpectrum:
+        """
+        Subtract a background scan from a foreground scan using the native
+        ``IScanAveragePlus.SubtractScans`` DLL method.
+
+        Unlike :meth:`subtract_background` this does not require the optional
+        ``BackgroundSubtraction.dll`` — the subtraction is performed entirely
+        by the core RawFileReader assembly.
+
+        Parameters
+        ----------
+        foreground_scan:
+            1-based scan number for the foreground spectrum.
+        background_scan:
+            1-based scan number for the background spectrum.
+        mass_range:
+            Optional ``(low_mz, high_mz)`` window applied to the result.
+        """
+        self._check_open()
+        self._check_scan(foreground_scan)
+        self._check_scan(background_scan)
+
+        from ThermoFisher.CommonCore.Data.Business import MassOptions  # type: ignore
+        from System.Collections.Generic import List as DotNetList  # type: ignore
+        from System import Int32  # type: ignore
+
+        opts = MassOptions()
+
+        # Get each scan as a Scan object via AverageScans with a single-item list.
+        def _scan_object(scan_no: int):
+            dn = DotNetList[Int32]()
+            dn.Add(Int32(scan_no))
+            return _reflect_call(self._raw_file, "AverageScans", dn, opts)
+
+        fg_scan = _scan_object(foreground_scan)
+        bg_scan = _scan_object(background_scan)
+
+        result = _reflect_call(self._raw_file, "SubtractScans", fg_scan, bg_scan, opts)
+
+        masses, intensities = _extract_preferred(result)
+
+        if mass_range is not None:
+            lo, hi = mass_range
+            pairs = [(m, i) for m, i in zip(masses, intensities) if lo <= m <= hi]
+            masses = [m for m, _ in pairs]
+            intensities = [i for _, i in pairs]
+
+        scan_filter = str(self._raw_file.GetFilterForScanNumber(foreground_scan))
+        return BackgroundSubtractedSpectrum(
+            scan_number=foreground_scan,
+            background_scans=[background_scan],
             scan_filter=scan_filter,
             masses=masses,
             intensities=intensities,

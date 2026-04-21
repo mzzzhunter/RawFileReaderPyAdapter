@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from .models import AutoSamplerInfo, FileInfo, InstrumentInfo, SampleInfo
+from .models import AutoSamplerInfo, FileInfo, InstrumentInfo, RawFileError, RunHeaderInfo, SampleInfo
 from .exceptions import InstrumentSelectionError
 
 
@@ -97,11 +97,27 @@ class HeadersMixin:
         FileInfo
             Contains operator, creation date, instrument name/serial, etc.
             For sample-specific fields use :meth:`get_sample_info`.
+            Extended fields (``file_description``, ``computer_name``, etc.)
+            are populated when the underlying API exposes them.
         """
         self._check_open()
         fh = self._raw_file.FileHeader
         rh = self._raw_file.RunHeaderEx
         idata = self._raw_file.GetInstrumentData()
+
+        def _safe_int(obj, attr):
+            try:
+                v = getattr(obj, attr, None)
+                return int(v) if v is not None else None
+            except Exception:
+                return None
+
+        def _safe_str(obj, attr):
+            try:
+                v = getattr(obj, attr, None)
+                return str(v) if v is not None else None
+            except Exception:
+                return None
 
         return FileInfo(
             file_name=str(self._raw_file.FileName),
@@ -113,6 +129,93 @@ class HeadersMixin:
             instrument_serial_number=str(idata.SerialNumber),
             number_of_ms_orders=int(rh.MsOrderCount) if hasattr(rh, "MsOrderCount") else 0,
             has_ms_data=bool(rh.HasMsData) if hasattr(rh, "HasMsData") else True,
+            # Extended IFileHeader / IRawDataProperties fields
+            file_description=_safe_str(fh, "FileDescription"),
+            file_type=_safe_str(fh, "FileType"),
+            revision=_safe_int(fh, "Revision"),
+            modified_date=_safe_str(fh, "ModifiedDate"),
+            computer_name=_safe_str(self._raw_file, "ComputerName"),
+            path=_safe_str(self._raw_file, "Path"),
+            who_created_logon=_safe_str(fh, "WhoCreatedLogon"),
+            who_modified_logon=_safe_str(fh, "WhoModifiedLogon"),
+            number_of_times_calibrated=_safe_int(fh, "NumberOfTimesCalibrated"),
+            number_of_times_modified=_safe_int(fh, "NumberOfTimesModified"),
+        )
+
+    # ------------------------------------------------------------------
+    # Run header info
+    # ------------------------------------------------------------------
+
+    def get_run_header_info(self) -> RunHeaderInfo:
+        """
+        Return extended run-header metadata (IRunHeader / IRunHeaderAccess).
+
+        Includes scan count, time range, mass range, intensity maxima,
+        log entry counts, comments, and acquisition-state flags.
+        """
+        self._check_open()
+        rh = self._raw_file.RunHeaderEx
+
+        def _safe(attr, cast=str, default=None):
+            try:
+                v = getattr(rh, attr, None)
+                return cast(v) if v is not None else default
+            except Exception:
+                return default
+
+        return RunHeaderInfo(
+            first_scan=_safe("FirstSpectrum", int, 0),
+            last_scan=_safe("LastSpectrum", int, 0),
+            start_time=_safe("StartTime", float, 0.0),
+            end_time=_safe("EndTime", float, 0.0),
+            low_mass=_safe("LowMass", float, 0.0),
+            high_mass=_safe("HighMass", float, 0.0),
+            mass_resolution=_safe("MassResolution", float, 0.0),
+            max_intensity=_safe("MaxIntensity", float, 0.0),
+            max_integrated_intensity=_safe("MaxIntegratedIntensity", float, 0.0),
+            spectra_count=_safe("SpectraCount", int, 0),
+            status_log_count=_safe("StatusLogCount", int, 0),
+            error_log_count=_safe("ErrorLogCount", int, 0),
+            trailer_extra_count=_safe("TrailerExtraCount", int, 0),
+            tune_data_count=_safe("TuneDataCount", int, 0),
+            expected_run_time=_safe("ExpectedRunTime", float, 0.0),
+            comment1=_safe("Comment1", str, ""),
+            comment2=_safe("Comment2", str, ""),
+            in_acquisition=_safe("InAcquisition", bool, False),
+            tolerance_unit=_safe("ToleranceUnit", str, ""),
+            filter_mass_precision=_safe("FilterMassPrecision", int),
+            writer_protocol=_safe("WriterProtocol", int),
+        )
+
+    # ------------------------------------------------------------------
+    # File error
+    # ------------------------------------------------------------------
+
+    def get_file_error(self) -> RawFileError:
+        """
+        Return detailed error information from the open RAW file.
+
+        Returns
+        -------
+        RawFileError
+            ``has_error`` is ``False`` when the file opened cleanly.
+        """
+        self._check_open()
+        fe = getattr(self._raw_file, "FileError", None)
+        if fe is None:
+            return RawFileError(has_error=False, error_code=0, error_message="")
+        try:
+            has_error = bool(getattr(fe, "HasError", False) or getattr(fe, "IsError", False))
+            error_code = int(getattr(fe, "ErrorCode", 0) or 0)
+            error_message = str(getattr(fe, "ErrorMessage", "") or "")
+        except Exception:
+            has_error = False
+            error_code = 0
+            error_message = ""
+        return RawFileError(
+            has_error=has_error,
+            error_code=error_code,
+            error_message=error_message,
         )
 
     # ------------------------------------------------------------------
