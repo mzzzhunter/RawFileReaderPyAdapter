@@ -2,6 +2,8 @@
 
 A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReader](https://github.com/thermofisherlsms/RawFileReader) .NET assemblies.  It uses [pythonnet](https://github.com/pythonnet/pythonnet) to bridge Python and .NET so you can read Thermo `.raw` mass-spectrometry files without leaving Python.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mzzzhunter/RawFileReaderPyAdapter/blob/main/colab_demo.ipynb)
+
 ---
 
 ## Table of Contents
@@ -24,7 +26,6 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
   - [Trailer Extra Data](#trailer-extra-data)
   - [Status Log](#status-log)
   - [Scan Dependents (MS^n)](#scan-dependents-msn)
-  - [Mass Precision Estimation](#mass-precision-estimation)
   - [Bulk Iteration Helpers](#bulk-iteration-helpers)
   - [Scan Quality Analysis](#scan-quality-analysis)
   - [Spectral Subtraction](#spectral-subtraction)
@@ -42,12 +43,12 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 |---|---|
 | Python | ≥ 3.8 |
 | pythonnet | ≥ 3.0.3 |
-| .NET Runtime | ≥ 6.0 (for `NetCore` DLLs) or .NET Framework ≥ 4.5.1 |
+| .NET Runtime | ≥ 6.0 (for `NetCore` DLLs) or .NET Framework ≥ 4.5.1 — **recommend .NET 8.0 on macOS and Linux** |
 | RawFileReader DLLs | Latest from [thermofisherlsms/RawFileReader](https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs) |
 
 ### Required DLLs
 
-The RawFileReader DLLs are included in this repository under `lib/Net8/Assemblies/`.
+The RawFileReader DLLs are included in this repository under `libs/Net8/Assemblies/`.
 The loader finds them automatically — no additional setup is required.
 
 If you prefer to use DLLs from a different location, set the environment variable:
@@ -56,13 +57,16 @@ If you prefer to use DLLs from a different location, set the environment variabl
 export RAWFILEREADER_LIBS=/path/to/dlls
 ```
 
-The expected files are:
+All DLLs bundled in `libs/Net8/Assemblies/`:
 
 ```
-lib/Net8/Assemblies/
+libs/Net8/Assemblies/
+  OpenMcdf.dll
+  OpenMcdf.Extensions.dll
+  ThermoFisher.CommonCore.BackgroundSubtraction.dll
   ThermoFisher.CommonCore.Data.dll
+  ThermoFisher.CommonCore.MassPrecisionEstimator.dll
   ThermoFisher.CommonCore.RawFileReader.dll
-  ThermoFisher.CommonCore.BackgroundSubtraction.dll   # optional
 ```
 
 ---
