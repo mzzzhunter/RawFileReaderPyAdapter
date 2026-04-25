@@ -57,7 +57,6 @@ All 13 public data models live in `rawfilereader/models.py`:
 | `TrailerData` | `get_trailer_data()` |
 | `StatusLogEntry` | `get_status_log_for_scan()` |
 | `ScanDependent` | `get_scan_dependents()` |
-| `MassPrecision` | `get_mass_precision()` |
 | `AveragedScan` | `average_scans_in_range()`, `average_scans()` |
 | `SubtractedSpectrum` | `subtract_spectra()` |
 | `BackgroundSubtractedSpectrum` | `subtract_background()` |
@@ -102,7 +101,6 @@ Use the most specific exception. Never raise bare `Exception` or `RuntimeError`.
 Required DLLs:
 - `ThermoFisher.CommonCore.Data.dll`
 - `ThermoFisher.CommonCore.RawFileReader.dll`
-- `ThermoFisher.CommonCore.MassPrecisionEstimator.dll`
 
 Optional DLL (loaded silently if present):
 - `ThermoFisher.CommonCore.BackgroundSubtraction.dll`
@@ -150,7 +148,7 @@ Everything exported from `rawfilereader/__init__.py` is public. Adding or removi
 
 **Classes:** `RawFileAdapter`
 
-**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `SubtractedSpectrum`, `BackgroundSubtractedSpectrum`
+**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `SubtractedSpectrum`, `BackgroundSubtractedSpectrum`
 
 **Exceptions:** `RawFileError`, `RawFileNotOpenError`, `RawFileInAcquisitionError`, `InstrumentSelectionError`, `ScanNotFoundError`
 
@@ -163,26 +161,10 @@ Note: `AveragedScan` and `AssemblyLoadError` are defined internally but not curr
 ```bash
 # Install in editable mode with pythonnet
 pip install -e .
-
-# Download the RawFileReader DLLs using the included helper script
-python download_dlls.py                  # required DLLs → ./libs/, sets RAWFILEREADER_LIBS
-python download_dlls.py --include-optional  # also fetches BackgroundSubtraction.dll
-python download_dlls.py --libs-dir /path/to/dlls  # custom destination
-
-# Or set the env variable manually if you already have the DLLs
-export RAWFILEREADER_LIBS=/path/to/dlls
 ```
 
-DLLs must be the NetCore build from:
-`https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs/NetCore`
-
-### `download_dlls.py` flags
-
-| Flag | Description |
-|---|---|
-| `--libs-dir DIR` | Destination directory (default: `./libs/` next to the script) |
-| `--include-optional` | Also download `ThermoFisher.CommonCore.BackgroundSubtraction.dll` |
-| `--no-env` | Skip writing `RAWFILEREADER_LIBS` to the shell config file |
+The RawFileReader DLLs are shipped in `lib/Net8/Assemblies/` and discovered automatically.
+To override, set `RAWFILEREADER_LIBS` to the folder containing the `.dll` files.
 
 ---
 

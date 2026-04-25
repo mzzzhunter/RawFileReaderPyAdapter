@@ -47,35 +47,21 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 
 ### Required DLLs
 
-The easiest way to get the DLLs is the included helper script:
+The RawFileReader DLLs are included in this repository under `lib/Net8/Assemblies/`.
+The loader finds them automatically — no additional setup is required.
+
+If you prefer to use DLLs from a different location, set the environment variable:
 
 ```bash
-# Required DLLs only
-python download_dlls.py
-
-# Required + optional BackgroundSubtraction DLL
-python download_dlls.py --include-optional
-
-# Custom destination
-python download_dlls.py --libs-dir /opt/thermo/libs
-
-# Download without writing to shell config
-python download_dlls.py --no-env
+export RAWFILEREADER_LIBS=/path/to/dlls
 ```
 
-The script downloads the DLLs from the upstream repository, places them in
-`./libs/` by default, and writes `export RAWFILEREADER_LIBS=<path>` to your
-shell config file (`~/.bashrc`, `~/.zshrc`, or `~/.profile`).
-
-Alternatively, download them manually from the `Libs/NetCore` folder of the
-upstream repository and place them in a `libs/` directory (or set
-`RAWFILEREADER_LIBS`):
+The expected files are:
 
 ```
-libs/
+lib/Net8/Assemblies/
   ThermoFisher.CommonCore.Data.dll
   ThermoFisher.CommonCore.RawFileReader.dll
-  ThermoFisher.CommonCore.MassPrecisionEstimator.dll
   ThermoFisher.CommonCore.BackgroundSubtraction.dll   # optional
 ```
 
@@ -97,7 +83,6 @@ Or directly from source:
 git clone https://github.com/mzzzhunter/RawFileReaderPyAdapter.git
 cd RawFileReaderPyAdapter
 pip install -r requirements.txt
-python download_dlls.py          # download DLLs and set RAWFILEREADER_LIBS
 ```
 
 ---
@@ -481,25 +466,6 @@ print(f"Scan {dep.scan_number} triggered: {dep.dependent_scan_numbers}")
 
 ---
 
-### Mass Precision Estimation
-
-#### `get_mass_precision(scan_number) -> List[MassPrecision]`
-
-Works on Orbitrap / FTMS scans only.
-
-```python
-estimates = rf.get_mass_precision(1)
-for e in estimates[:10]:
-    print(
-        f"  m/z={e.mass:.5f}  "
-        f"ppm={e.mz_accuracy_mass:.3f}  "
-        f"mmu={e.mz_accuracy_mmu:.3f}  "
-        f"R={e.resolution:.0f}"
-    )
-```
-
----
-
 ### Bulk Iteration Helpers
 
 #### `iter_scan_info(ms_order=None) -> Iterator[ScanInfo]`
@@ -673,7 +639,6 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `TrailerData` | `scan_number`, `fields` (dict) |
 | `StatusLogEntry` | `retention_time`, `fields` (dict) |
 | `ScanDependent` | `scan_number`, `dependent_scan_numbers` |
-| `MassPrecision` | `mass`, `mz_accuracy_mass` (ppm), `mz_accuracy_mmu`, `resolution` |
 | `AveragedScan` | `first_scan`, `last_scan`, `masses`, `intensities` |
 | `SubtractedSpectrum` | `scan_a`, `scan_b`, `scan_filter`, `mass_range`, `is_centroid`, `masses`, `intensities`, `intensities_clipped`, `peaks` |
 | `BackgroundSubtractedSpectrum` | `scan_number`, `background_scans`, `scan_filter`, `masses`, `intensities`, `peaks` — requires `BackgroundSubtraction.dll` |
@@ -820,20 +785,7 @@ with RawFileAdapter("sample.raw") as rf:
         print(f"  {k}: {v}")
 ```
 
-### Example 7 – Mass precision for an Orbitrap scan
-
-```python
-from rawfilereader import RawFileAdapter
-
-with RawFileAdapter("sample.raw") as rf:
-    estimates = rf.get_mass_precision(1)
-    print(f"{'m/z':>12}  {'ppm':>8}  {'mmu':>8}  {'Resolution':>12}")
-    for e in estimates[:20]:
-        print(f"{e.mass:12.5f}  {e.mz_accuracy_mass:8.3f}  "
-              f"{e.mz_accuracy_mmu:8.4f}  {e.resolution:12.0f}")
-```
-
-### Example 8 – List all instruments and their types
+### Example 7 – List all instruments and their types
 
 ```python
 from rawfilereader import RawFileAdapter
@@ -853,7 +805,7 @@ with RawFileAdapter("sample.raw") as rf:
         print(f"MS instance {instance}: {idata.name} ({idata.serial_number})")
 ```
 
-### Example 9 – Find MS^n scan tree
+### Example 8 – Find MS^n scan tree
 
 ```python
 from rawfilereader import RawFileAdapter
@@ -868,7 +820,7 @@ with RawFileAdapter("sample.raw") as rf:
                 print(f"MS1 scan {scan} -> MS2 scans: {deps.dependent_scan_numbers}")
 ```
 
-### Example 10 – Run data-integrity check
+### Example 9 – Run data-integrity check
 
 ```python
 from rawfilereader import RawFileAdapter
@@ -885,7 +837,7 @@ with RawFileAdapter("sample.raw") as rf:
         print(f"WARNING: {summary['out_of_order']} scan(s) have out-of-order masses!")
 ```
 
-### Example 11 – Background subtraction with the Thermo algorithm
+### Example 10 – Background subtraction with the Thermo algorithm
 
 Requires `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs directory.
 

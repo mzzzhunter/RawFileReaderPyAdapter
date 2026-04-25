@@ -10,26 +10,22 @@ Supported layouts
 Required DLLs (NetCore build)
 ------------------------------
 - ThermoFisher.CommonCore.Data.dll
-- ThermoFisher.CommonCore.MassPrecisionEstimator.dll
 - ThermoFisher.CommonCore.RawFileReader.dll
 - ThermoFisher.CommonCore.BackgroundSubtraction.dll (optional)
 """
 
 import os
 import sys
-import glob
 from pathlib import Path
 from typing import Optional
 
 from .exceptions import AssemblyLoadError
 
 _REQUIRED_DLLS = [
+    "OpenMcdf",
+    "OpenMcdf.Extensions",
     "ThermoFisher.CommonCore.Data",
     "ThermoFisher.CommonCore.RawFileReader",
-    "ThermoFisher.CommonCore.MassPrecisionEstimator",
-]
-
-_OPTIONAL_DLLS = [
     "ThermoFisher.CommonCore.BackgroundSubtraction",
 ]
 
@@ -45,6 +41,8 @@ def _find_libs_dir() -> Optional[Path]:
 
     # 2. Relative to this file (packaged alongside the adapter)
     candidates = [
+        Path(__file__).parent.parent / "lib" / "Net8" / "Assemblies",
+        Path(__file__).parent.parent / "libs" / "Net8" / "Assemblies",
         Path(__file__).parent.parent / "libs",
         Path(__file__).parent.parent / "Libs",
         Path(__file__).parent / "libs",
@@ -77,6 +75,15 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
     if _loaded:
         return
 
+    # pythonnet 3.x needs the runtime selected before `import clr`.
+    # The DLLs are built for .NET Core / .NET 5+, so request "coreclr".
+    # This is a no-op if the runtime was already initialised.
+    try:
+        from pythonnet import load as _load_runtime
+        _load_runtime("coreclr")
+    except Exception:
+        pass  # pythonnet < 3.0, or runtime already set
+
     try:
         import clr  # noqa: F401 (pythonnet)
     except ImportError as exc:
@@ -97,7 +104,9 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
     # Add the directory to the .NET search path
     sys.path.append(str(search_dir))
 
-    # Load required assemblies
+    # Load required assemblies by name (directory is already in sys.path).
+    # Passing the name rather than the full path is the reliable pattern for
+    # pythonnet 3.x with .NET Core runtimes.
     missing = []
     for name in _REQUIRED_DLLS:
         dll_path = search_dir / f"{name}.dll"
@@ -105,24 +114,15 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
             missing.append(str(dll_path))
             continue
         try:
-            clr.AddReference(str(dll_path))
+            clr.AddReference(name)
         except Exception as exc:
             raise AssemblyLoadError(
-                f"Failed to load assembly {dll_path}: {exc}"
+                f"Failed to load assembly '{name}': {exc}"
             ) from exc
 
     if missing:
         raise AssemblyLoadError(
-            f"The following required DLLs were not found:\n" + "\n".join(missing)
+            "The following required DLLs were not found:\n" + "\n".join(missing)
         )
-
-    # Load optional assemblies (silently skip if missing)
-    for name in _OPTIONAL_DLLS:
-        dll_path = search_dir / f"{name}.dll"
-        if dll_path.exists():
-            try:
-                clr.AddReference(str(dll_path))
-            except Exception:
-                pass
 
     _loaded = True

@@ -151,16 +151,6 @@ class ScanDependent:
 
 
 @dataclass
-class MassPrecision:
-    """Mass accuracy / precision estimate for a single peak."""
-    mass: float
-    intensity: float
-    resolution: float
-    mz_accuracy_mass: float     # ppm
-    mz_accuracy_mmu: float      # mmu
-
-
-@dataclass
 class AveragedScan:
     """Result from averaging multiple scans."""
     first_scan: int

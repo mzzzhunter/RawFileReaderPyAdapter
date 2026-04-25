@@ -17,7 +17,6 @@ from .models import (
     TrailerData,
     StatusLogEntry,
     ScanDependent,
-    MassPrecision,
     SubtractedSpectrum,
     BackgroundSubtractedSpectrum,
 )
@@ -42,7 +41,6 @@ __all__ = [
     "TrailerData",
     "StatusLogEntry",
     "ScanDependent",
-    "MassPrecision",
     "SubtractedSpectrum",
     "BackgroundSubtractedSpectrum",
     "RawFileError",
