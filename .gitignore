@@ -2,3 +2,6 @@ libs/
 local_test.ipynb
 .CLAUDE.MD
 *.raw
+__pycache__/
+*.pyc
+*.pyo
