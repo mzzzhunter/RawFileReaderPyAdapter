@@ -26,6 +26,17 @@ class FileInfo:
     instrument_serial_number: str
     number_of_ms_orders: int
     has_ms_data: bool
+    # Extended IFileHeader fields (populated when available)
+    file_description: str = ""
+    file_type: str = ""
+    revision: int = 0
+    modified_date: str = ""
+    computer_name: str = ""
+    path: str = ""
+    who_created_logon: str = ""
+    who_modified_logon: str = ""
+    number_of_times_calibrated: int = 0
+    number_of_times_modified: int = 0
 
 
 @dataclass
@@ -205,3 +216,47 @@ class SubtractedSpectrum:
     def peaks(self) -> List[Tuple[float, float]]:
         """Return ``(mass, intensity)`` tuples using the clipped intensities."""
         return [(m, i) for m, i in zip(self.masses, self.intensities_clipped) if i > 0]
+
+
+@dataclass
+class MassPrecision:
+    """Mass accuracy / precision estimate for a single peak."""
+    mass: float
+    intensity: float
+    resolution: float
+    mz_accuracy_ppm: float
+    mz_accuracy_mmu: float
+
+
+@dataclass
+class RunHeaderInfo:
+    """Extended run-header metadata from IRawData.RunHeaderEx."""
+    first_scan: int
+    last_scan: int
+    start_time: float
+    end_time: float
+    low_mass: float
+    high_mass: float
+    mass_resolution: float
+    max_intensity: float
+    max_integrated_intensity: float
+    spectra_count: int
+    status_log_count: int
+    error_log_count: int
+    trailer_extra_count: int
+    tune_data_count: int
+    expected_run_time: float
+    comment1: str
+    comment2: str
+    in_acquisition: bool
+    tolerance_unit: str
+    filter_mass_precision: int
+    writer_protocol: int
+
+
+@dataclass
+class FileError:
+    """Diagnostic error state from IRawDataPlus.FileError."""
+    has_error: bool
+    error_code: int
+    error_message: str

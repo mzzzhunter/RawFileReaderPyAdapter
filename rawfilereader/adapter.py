@@ -31,9 +31,12 @@ from .models import (
     BackgroundSubtractedSpectrum,
     CentroidData,
     ChromatogramData,
+    FileError,
     FileInfo,
     InstrumentInfo,
+    MassPrecision,
     ProfileData,
+    RunHeaderInfo,
     ScanDependent,
     ScanInfo,
     ScanStats,
@@ -41,6 +44,51 @@ from .models import (
     SubtractedSpectrum,
     TrailerData,
 )
+
+
+# ---------------------------------------------------------------------------
+# .NET reflection helper
+# ---------------------------------------------------------------------------
+
+def _reflect_call(obj, method_name, *args):
+    """
+    Invoke a .NET instance method via reflection.
+
+    pythonnet 3.x interface proxies only expose methods declared on the
+    specific interface type.  Some methods (e.g. AverageScansInScanRange,
+    SubtractScans) live on the concrete RawFileAccess class and are
+    unreachable via normal attribute access.  Explicit interface
+    implementations carry a fully-qualified name suffix, so we search
+    public methods first, then widen to non-public with name-suffix matching.
+    """
+    import System  # type: ignore
+    from System.Reflection import BindingFlags  # type: ignore
+
+    nargs = len(args)
+
+    method = next(
+        (m for m in obj.GetType().GetMethods()
+         if m.Name == method_name and m.GetParameters().Length == nargs),
+        None,
+    )
+
+    if method is None:
+        all_flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+        method = next(
+            (m for m in obj.GetType().GetMethods(all_flags)
+             if (m.Name == method_name or m.Name.endswith("." + method_name))
+             and m.GetParameters().Length == nargs),
+            None,
+        )
+
+    if method is None:
+        raise AttributeError(
+            f"'{obj.GetType().Name}' has no method '{method_name}' "
+            f"with {nargs} parameter(s)"
+        )
+
+    arg_array = System.Array[System.Object](list(args))
+    return method.Invoke(obj, arg_array)
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +483,11 @@ class RawFileAdapter:
         idata = self._raw_file.GetInstrumentData()
         def _s(obj, attr):
             return str(getattr(obj, attr, ""))
+        def _i(obj, attr, default=0):
+            try:
+                return int(getattr(obj, attr, default) or default)
+            except Exception:
+                return default
 
         return FileInfo(
             file_name=str(self._raw_file.FileName),
@@ -452,6 +505,17 @@ class RawFileAdapter:
             instrument_serial_number=_s(idata, "SerialNumber"),
             number_of_ms_orders=int(getattr(rh, "MsOrderCount", 0)),
             has_ms_data=bool(getattr(rh, "HasMsData", True)),
+            # Extended fields
+            file_description=_s(fh, "FileDescription"),
+            file_type=_s(fh, "FileType"),
+            revision=_i(fh, "Revision"),
+            modified_date=_s(fh, "ModifiedDate"),
+            computer_name=_s(self._raw_file, "ComputerName"),
+            path=_s(self._raw_file, "Path"),
+            who_created_logon=_s(fh, "WhoCreatedLogon"),
+            who_modified_logon=_s(fh, "WhoModifiedLogon"),
+            number_of_times_calibrated=_i(fh, "NumberOfTimesCalibrated"),
+            number_of_times_modified=_i(fh, "NumberOfTimesModified"),
         )
 
     def get_scan_range(self) -> Tuple[int, int]:
@@ -665,8 +729,27 @@ class RawFileAdapter:
         last_scan: int,
         filter_string: Optional[str] = None,
     ) -> AveragedScan:
-        """Average all scans between *first_scan* and *last_scan* (inclusive)."""
+        """Average all scans between *first_scan* and *last_scan* (inclusive).
+
+        Tries the native ``AverageScansInScanRange`` DLL call first (faster
+        for large ranges); falls back to per-scan centroid reads merged in
+        Python if the method is not available on this DLL version.
+        """
         self._check_open()
+        opts = self._MassOptions()
+        try:
+            avg = _reflect_call(
+                self._raw_file, "AverageScansInScanRange",
+                first_scan, last_scan, filter_string or "", opts,
+            )
+            masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
+            intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+            return AveragedScan(first_scan=first_scan, last_scan=last_scan,
+                                masses=masses, intensities=intensities)
+        except (AttributeError, Exception):
+            pass
+
+        # Python fallback
         scan_masses: List[List[float]] = []
         scan_intensities: List[List[float]] = []
         for scan_num in range(first_scan, last_scan + 1):
@@ -677,16 +760,30 @@ class RawFileAdapter:
             except Exception:
                 continue
         masses, intensities = _average_centroid_peaks(scan_masses, scan_intensities)
-        return AveragedScan(
-            first_scan=first_scan,
-            last_scan=last_scan,
-            masses=masses,
-            intensities=intensities,
-        )
+        return AveragedScan(first_scan=first_scan, last_scan=last_scan,
+                            masses=masses, intensities=intensities)
 
     def average_scans(self, scan_numbers: List[int]) -> AveragedScan:
-        """Average the spectra for an arbitrary list of *scan_numbers*."""
+        """Average the spectra for an arbitrary list of *scan_numbers*.
+
+        Tries the native ``AverageScans(List<int>, MassOptions)`` DLL call
+        first; falls back to per-scan centroid reads merged in Python.
+        """
         self._check_open()
+        opts = self._MassOptions()
+        try:
+            dn_list = self._DotNetList[self._Int32]()
+            for s in scan_numbers:
+                dn_list.Add(self._Int32(s))
+            avg = _reflect_call(self._raw_file, "AverageScans", dn_list, opts)
+            masses = [float(m) for m in avg.PreferredMasses] if avg.PreferredMasses else []
+            intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
+            return AveragedScan(first_scan=min(scan_numbers), last_scan=max(scan_numbers),
+                                masses=masses, intensities=intensities)
+        except (AttributeError, Exception):
+            pass
+
+        # Python fallback
         scan_masses: List[List[float]] = []
         scan_intensities: List[List[float]] = []
         for scan_num in scan_numbers:
@@ -697,12 +794,8 @@ class RawFileAdapter:
             except Exception:
                 continue
         masses, intensities = _average_centroid_peaks(scan_masses, scan_intensities)
-        return AveragedScan(
-            first_scan=min(scan_numbers),
-            last_scan=max(scan_numbers),
-            masses=masses,
-            intensities=intensities,
-        )
+        return AveragedScan(first_scan=min(scan_numbers), last_scan=max(scan_numbers),
+                            masses=masses, intensities=intensities)
 
     # ------------------------------------------------------------------
     # Chromatogram
@@ -810,6 +903,179 @@ class RawFileAdapter:
         except Exception:
             pass
         return ScanDependent(scan_number=scan_number, dependent_scan_numbers=dependent_scans)
+
+    def get_mass_precision(self, scan_number: int) -> List[MassPrecision]:
+        """
+        Return per-peak mass accuracy estimates for *scan_number*.
+
+        Uses ``ThermoFisher.CommonCore.MassPrecisionEstimator``.  Returns an
+        empty list if the estimator is unavailable or returns no results.
+
+        Parameters
+        ----------
+        scan_number:
+            1-based scan number.  Must be a high-resolution (FT) scan.
+        """
+        self._check_open()
+        self._check_scan(scan_number)
+        try:
+            from ThermoFisher.CommonCore.MassPrecisionEstimator import PrecisionEstimate  # type: ignore
+        except ImportError:
+            return []
+        try:
+            results = PrecisionEstimate.GetMassPrecisionEstimate(
+                self._raw_file, scan_number, False, 5.0
+            )
+            if results is None:
+                return []
+            out: List[MassPrecision] = []
+            for r in results:
+                out.append(MassPrecision(
+                    mass=float(r.Mass),
+                    intensity=float(r.Intensity),
+                    resolution=float(r.Resolution),
+                    mz_accuracy_ppm=float(r.MZAccuracyInPPM),
+                    mz_accuracy_mmu=float(r.MZAccuracyInMMU),
+                ))
+            return out
+        except Exception:
+            return []
+
+    def get_run_header_info(self) -> RunHeaderInfo:
+        """Return extended run-header metadata from ``IRawData.RunHeaderEx``."""
+        self._check_open()
+        rh = self._raw_file.RunHeaderEx
+        def _f(attr, default=0.0):
+            try:
+                return float(getattr(rh, attr, default) or default)
+            except Exception:
+                return float(default)
+        def _i(attr, default=0):
+            try:
+                return int(getattr(rh, attr, default) or default)
+            except Exception:
+                return int(default)
+        def _s(attr):
+            try:
+                return str(getattr(rh, attr, "") or "")
+            except Exception:
+                return ""
+        return RunHeaderInfo(
+            first_scan=_i("FirstSpectrum"),
+            last_scan=_i("LastSpectrum"),
+            start_time=_f("StartTime"),
+            end_time=_f("EndTime"),
+            low_mass=_f("LowMass"),
+            high_mass=_f("HighMass"),
+            mass_resolution=_f("MassResolution"),
+            max_intensity=_f("MaxIntensity"),
+            max_integrated_intensity=_f("MaxIntegratedIntensity"),
+            spectra_count=_i("SpectraCount"),
+            status_log_count=_i("StatusLogCount"),
+            error_log_count=_i("ErrorLogCount"),
+            trailer_extra_count=_i("TrailerExtraCount"),
+            tune_data_count=_i("TuneDataCount"),
+            expected_run_time=_f("ExpectedRunTime"),
+            comment1=_s("Comment1"),
+            comment2=_s("Comment2"),
+            in_acquisition=bool(getattr(rh, "InAcquisition", False)),
+            tolerance_unit=_s("ToleranceUnit"),
+            filter_mass_precision=_i("FilterMassPrecision"),
+            writer_protocol=_i("WriterProtocol"),
+        )
+
+    def get_file_error(self) -> FileError:
+        """
+        Return diagnostic error state from ``IRawDataPlus.FileError``.
+
+        Useful for diagnosing why a file cannot be opened or is corrupted.
+        ``has_error`` will be ``False`` for healthy files.
+        """
+        self._check_open()
+        fe = getattr(self._raw_file, "FileError", None)
+        if fe is None:
+            return FileError(has_error=False, error_code=0, error_message="")
+        try:
+            has_error = bool(getattr(fe, "HasError", False))
+            error_code = int(getattr(fe, "ErrorCode", 0) or 0)
+            error_message = str(getattr(fe, "ErrorMessage", "") or "")
+        except Exception:
+            has_error = False
+            error_code = 0
+            error_message = ""
+        return FileError(has_error=has_error, error_code=error_code, error_message=error_message)
+
+    # ------------------------------------------------------------------
+    # Scan filter helpers
+    # ------------------------------------------------------------------
+
+    def get_filtered_scan_numbers(
+        self,
+        filter_string: str,
+        start_scan: Optional[int] = None,
+        end_scan: Optional[int] = None,
+    ) -> List[int]:
+        """
+        Return all scan numbers whose filter matches *filter_string*.
+
+        Parameters
+        ----------
+        filter_string:
+            Exact scan-filter string (as returned by :meth:`get_filters`).
+        start_scan, end_scan:
+            Optional 1-based scan range to restrict the search.
+        """
+        self._check_open()
+        first, last = self.get_scan_range()
+        s0 = start_scan if start_scan is not None else first
+        s1 = end_scan if end_scan is not None else last
+        try:
+            nums = self._raw_file.GetFilteredScanEnumerator(filter_string)
+            return [int(n) for n in nums if s0 <= int(n) <= s1]
+        except Exception:
+            return [
+                n for n in range(s0, s1 + 1)
+                if self._raw_file.GetFilterForScanNumber(n).ToString() == filter_string
+            ]
+
+    def iterate_filtered_scans(
+        self,
+        filter_string: str,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+    ) -> Iterator[int]:
+        """
+        Lazily yield scan numbers whose filter matches *filter_string*.
+
+        More memory-efficient than :meth:`get_filtered_scan_numbers` for
+        very large files because scans are yielded one at a time.
+
+        Parameters
+        ----------
+        filter_string:
+            Exact scan-filter string.
+        start_time, end_time:
+            Optional retention-time window in minutes.
+        """
+        self._check_open()
+        try:
+            if start_time is not None and end_time is not None:
+                nums = self._raw_file.GetFilteredScanEnumeratorOverTime(
+                    filter_string, start_time, end_time
+                )
+            else:
+                nums = self._raw_file.GetFilteredScanEnumerator(filter_string)
+            for n in nums:
+                yield int(n)
+        except Exception:
+            first, last = self.get_scan_range()
+            if start_time is not None:
+                first = int(self._raw_file.ScanNumberFromRetentionTime(start_time))
+            if end_time is not None:
+                last = int(self._raw_file.ScanNumberFromRetentionTime(end_time))
+            for n in range(first, last + 1):
+                if self._raw_file.GetFilterForScanNumber(n).ToString() == filter_string:
+                    yield n
 
     # ------------------------------------------------------------------
     # Iteration helpers

@@ -7,20 +7,25 @@ Uses pythonnet (clr) to bridge Python and .NET.
 
 from .adapter import RawFileAdapter
 from .models import (
-    ScanInfo,
-    CentroidData,
-    ProfileData,
-    ChromatogramData,
-    InstrumentInfo,
-    FileInfo,
-    ScanStats,
-    TrailerData,
-    StatusLogEntry,
-    ScanDependent,
-    SubtractedSpectrum,
+    AveragedScan,
     BackgroundSubtractedSpectrum,
+    CentroidData,
+    ChromatogramData,
+    FileError,
+    FileInfo,
+    InstrumentInfo,
+    MassPrecision,
+    ProfileData,
+    RunHeaderInfo,
+    ScanDependent,
+    ScanInfo,
+    ScanStats,
+    StatusLogEntry,
+    SubtractedSpectrum,
+    TrailerData,
 )
 from .exceptions import (
+    AssemblyLoadError,
     RawFileError,
     RawFileNotOpenError,
     RawFileInAcquisitionError,
@@ -28,21 +33,29 @@ from .exceptions import (
     ScanNotFoundError,
 )
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = [
+    # Main class
     "RawFileAdapter",
-    "ScanInfo",
-    "CentroidData",
-    "ProfileData",
-    "ChromatogramData",
-    "InstrumentInfo",
-    "FileInfo",
-    "ScanStats",
-    "TrailerData",
-    "StatusLogEntry",
-    "ScanDependent",
-    "SubtractedSpectrum",
+    # Models
+    "AveragedScan",
     "BackgroundSubtractedSpectrum",
+    "CentroidData",
+    "ChromatogramData",
+    "FileError",
+    "FileInfo",
+    "InstrumentInfo",
+    "MassPrecision",
+    "ProfileData",
+    "RunHeaderInfo",
+    "ScanDependent",
+    "ScanInfo",
+    "ScanStats",
+    "StatusLogEntry",
+    "SubtractedSpectrum",
+    "TrailerData",
+    # Exceptions
+    "AssemblyLoadError",
     "RawFileError",
     "RawFileNotOpenError",
     "RawFileInAcquisitionError",
