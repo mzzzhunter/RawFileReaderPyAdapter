@@ -469,3 +469,84 @@ class ScansMixin:
             )
             for e in estimates
         ]
+
+    # ------------------------------------------------------------------
+    # Bulk iteration helpers
+    # ------------------------------------------------------------------
+
+    def iter_scan_info(
+        self, ms_order: Optional[int] = None
+    ) -> Generator[ScanInfo, None, None]:
+        """
+        Yield :class:`~rawfilereader.models.ScanInfo` for every scan.
+
+        Parameters
+        ----------
+        ms_order:
+            When provided, only yield scans at that MS level (1 = MS1, 2 = MS2, …).
+        """
+        self._check_open()
+        first, last = self.get_scan_range()
+        for scan in range(first, last + 1):
+            info = self.get_scan_info(scan)
+            if ms_order is None or info.ms_order == ms_order:
+                yield info
+
+    def iter_centroid_data(
+        self, ms_order: Optional[int] = None
+    ) -> Generator[CentroidData, None, None]:
+        """
+        Yield :class:`~rawfilereader.models.CentroidData` for every centroid scan.
+
+        Parameters
+        ----------
+        ms_order:
+            When provided, only yield scans at that MS level.
+        """
+        self._check_open()
+        first, last = self.get_scan_range()
+        for scan in range(first, last + 1):
+            ev = self._raw_file.GetScanEventForScanNumber(scan)
+            if ms_order is not None and int(ev.MSOrder) != ms_order:
+                continue
+            yield self.get_centroid_stream(scan)
+
+    # ------------------------------------------------------------------
+    # Scan quality analysis
+    # ------------------------------------------------------------------
+
+    def analyze_all_scans(self) -> dict:
+        """
+        Walk every scan, verify m/z ordering, and return summary counts.
+
+        Returns a dict with keys ``total``, ``centroid``, ``profile``,
+        ``out_of_order``.
+        """
+        self._check_open()
+        first, last = self.get_scan_range()
+        total = centroid = profile = out_of_order = 0
+
+        for scan in range(first, last + 1):
+            total += 1
+            stats = self._raw_file.GetScanStatsForScanNumber(scan)
+            filt = self._raw_file.GetFilterForScanNumber(scan).ToString()
+            is_ft = "FTMS" in filt.upper()
+
+            if is_ft:
+                centroid += 1
+                cs = self._raw_file.GetCentroidStream(scan, False)
+                masses = [float(m) for m in cs.Masses] if cs.Masses else []
+            else:
+                profile += 1
+                seg = self._raw_file.GetSegmentedScanFromScanNumber(scan, stats)
+                masses = [float(p) for p in seg.Positions] if seg and seg.Positions else []
+
+            if any(masses[i] < masses[i - 1] for i in range(1, len(masses))):
+                out_of_order += 1
+
+        return {
+            "total": total,
+            "centroid": centroid,
+            "profile": profile,
+            "out_of_order": out_of_order,
+        }

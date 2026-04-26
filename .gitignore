@@ -9,3 +9,5 @@ build/
 .venv/
 venv/
 *.so
+local_test.ipynb
+*.raw

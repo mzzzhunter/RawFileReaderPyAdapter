@@ -10,7 +10,7 @@ This file provides context for AI assistants working on this codebase.
 
 - Package name (PyPI): `rawfilereader-python`
 - Importable as: `rawfilereader`
-- Version: `1.0.0`
+- Version: `2.0.0`
 - Python requirement: `>=3.8`
 - Single Python dependency: `pythonnet>=3.0.3`
 
@@ -20,63 +20,108 @@ This file provides context for AI assistants working on this codebase.
 
 ```
 RawFileReaderPyAdapter/
-├── rawfilereader/          # The Python package
-│   ├── __init__.py         # Public API exports + __version__
-│   ├── adapter.py          # Core RawFileAdapter class (~1250 lines)
-│   ├── models.py           # All return-type dataclasses (~194 lines)
-│   ├── loader.py           # .NET assembly discovery and loading (~129 lines)
-│   └── exceptions.py       # Custom exception hierarchy (~26 lines)
-├── README.md               # User-facing documentation
-├── setup.py                # Package metadata (setuptools)
-└── requirements.txt        # pythonnet>=3.0.3
+├── rawfilereader/              # The Python package
+│   ├── __init__.py             # Public API exports + __version__
+│   ├── adapter.py              # RawFileAdapter class (mixin composition)
+│   ├── models.py               # All return-type dataclasses
+│   ├── loader.py               # .NET assembly discovery and loading
+│   ├── exceptions.py           # Custom exception hierarchy
+│   ├── _base.py                # RawFileBase — open/close/guards
+│   ├── _headers.py             # HeadersMixin — file info, sample, run header
+│   ├── _scans.py               # ScansMixin — centroid, profile, stats, filters
+│   ├── _chromatograms.py       # ChromatogramsMixin — chromatograms
+│   ├── _logs.py                # LogsMixin — trailer/status/tune/error logs
+│   ├── _averaging.py           # AveragingMixin — averaging + subtraction
+│   ├── _methods.py             # MethodsMixin — instrument method text
+│   └── _threading.py           # RawFileThreadManager — threaded access
+├── libs/Net8/Assemblies/       # Bundled RawFileReader DLLs (Net8 build)
+├── colab_demo.ipynb            # Google Colab demo notebook
+├── sample.raw                  # Demo RAW file for Colab
+├── README.md                   # User-facing documentation
+├── setup.py                    # Package metadata (setuptools)
+└── requirements.txt            # pythonnet>=3.0.3
 ```
 
-There are no tests, no CI configuration, no `pyproject.toml`, and no `Makefile`.
+There are no automated tests, no CI configuration, and no `pyproject.toml`.
 
 ---
 
 ## Key Architectural Conventions
 
-### 1. No .NET Objects Leak to Callers
+### 1. Mixin Architecture
 
-Every public method on `RawFileAdapter` converts .NET objects to plain Python dataclasses before returning. Callers never receive a `pythonnet` proxy object. This is the most important design rule — always convert at the boundary.
+`RawFileAdapter` (in `adapter.py`) is a thin class that inherits from multiple focused mixins:
 
-### 2. All Return Types Are Dataclasses Defined in `models.py`
+```python
+class RawFileAdapter(
+    RawFileBase,       # open/close, _check_open, _check_scan
+    HeadersMixin,      # get_file_info, get_run_header_info, get_sample_info, …
+    ScansMixin,        # get_centroid_stream, get_scan_info, iter_scan_info, …
+    ChromatogramsMixin,# get_chromatogram, get_chromatogram_by_time, …
+    LogsMixin,         # get_trailer_data, get_status_log_for_scan, …
+    AveragingMixin,    # average_scans, subtract_spectra, subtract_background, …
+    MethodsMixin,      # has_instrument_method, get_instrument_method_text, …
+):
+```
 
-All 13 public data models live in `rawfilereader/models.py`:
+Add new functionality to the appropriate mixin file, not to `adapter.py`.
+
+### 2. No .NET Objects Leak to Callers
+
+Every public method converts .NET objects to plain Python dataclasses before returning. Callers never receive a `pythonnet` proxy object.
+
+### 3. All Return Types Are Dataclasses Defined in `models.py`
 
 | Dataclass | Returned by |
 |---|---|
 | `FileInfo` | `get_file_info()` |
+| `RunHeaderInfo` | `get_run_header_info()` |
+| `RawFileError` | `get_file_error()` |
 | `InstrumentInfo` | `get_instrument_data()` |
+| `SampleInfo` | `get_sample_info()` |
+| `AutoSamplerInfo` | `get_autosampler_info()` |
 | `ScanStats` | `get_scan_stats()` |
-| `CentroidData` | `get_centroid_stream()` |
+| `CentroidData` | `get_centroid_stream()`, `iter_centroid_data()` |
 | `ProfileData` | `get_profile_data()` |
-| `ScanInfo` | `get_scan_info()` |
-| `ChromatogramData` | `get_chromatogram()` |
-| `TrailerData` | `get_trailer_data()` |
-| `StatusLogEntry` | `get_status_log_for_scan()` |
+| `ScanInfo` | `get_scan_info()`, `iter_scan_info()` |
 | `ScanDependent` | `get_scan_dependents()` |
 | `MassPrecision` | `get_mass_precision()` |
-| `AveragedScan` | `average_scans_in_range()`, `average_scans()` |
-| `BackgroundSubtractedSpectrum` | `subtract_background()` |
+| `ChromatogramData` | `get_chromatogram()`, `get_chromatogram_by_time()`, `get_chromatogram_ex()` |
+| `TrailerData` | `get_trailer_data()` |
+| `StatusLogEntry` | `get_status_log_for_scan()`, `get_status_log_for_retention_time()` |
+| `TuneData` | `get_tune_data()` |
+| `ErrorLogEntry` | `get_error_log_entry()` |
+| `AveragedScan` | `average_scans_in_range()`, `average_scans()`, `average_scans_in_time_range()` |
+| `SubtractedSpectrum` | `subtract_spectra()` |
+| `BackgroundSubtractedSpectrum` | `subtract_background()`, `subtract_scans()` |
 
-When adding a new method that returns structured data, add a new dataclass to `models.py` first, then implement the adapter method.
+### 4. Convenience Properties on Dataclasses
 
-### 3. Convenience Properties on Dataclasses
-
-Some dataclasses expose computed properties for ergonomics:
 - `CentroidData.peaks` → `List[Tuple[float, float]]` (mass, intensity pairs)
 - `ProfileData.masses` / `.intensities` → flattened from `segments`
-- `BackgroundSubtractedSpectrum.peaks` → `(mass, intensity)` pairs
+- `SubtractedSpectrum.peaks` → clipped (non-negative) (mass, intensity) pairs
+- `BackgroundSubtractedSpectrum.peaks` → (mass, intensity) pairs
 
-Follow this pattern when a derived view of the data is clearly useful.
+### 5. Reflection Helper (`_reflect_call` in `_averaging.py`)
 
-### 4. Lazy .NET Imports
+pythonnet 3.x interface proxies only expose methods declared on the interface type. `RawFileAccess` concrete methods (averaging, subtraction) require reflection to call. `_reflect_call(obj, method_name, *args)` does a 2-pass search: public methods first, then non-public with name-suffix matching for explicit interface implementations.
 
-.NET types are never imported at module load time. They are imported inside `RawFileAdapter._import_dotnet_types()` and related helpers, which are called only after `load_assemblies()` has succeeded. This prevents `ImportError` at import time when DLLs are absent.
+### 6. Lazy .NET Imports
 
-### 5. Exception Hierarchy
+.NET types are imported inside mixin methods (or via `_base.py` helpers), never at module load time. This prevents `ImportError` when DLLs are absent at import time.
+
+### 7. Pure-Python Spectral Helpers (in `_averaging.py`)
+
+Four module-level pure-Python helpers support `subtract_spectra` (no .NET dependency):
+
+| Helper | Purpose |
+|---|---|
+| `_apply_mass_range(masses, intensities, range)` | Filter lists to a m/z window |
+| `_normalize_to_tic(intensities)` | Divide by sum (TIC normalisation) |
+| `_find_closest(target, sorted_masses, tol_ppm)` | Binary-search with ppm tolerance |
+| `_linear_interp(x_out, x_in, y_in)` | Linear interpolation for profile grids |
+
+### 8. Exception Hierarchy
 
 All custom exceptions inherit from `RawFileError` (defined in `exceptions.py`):
 
@@ -89,99 +134,68 @@ RawFileError
 └── AssemblyLoadError          — pythonnet or DLL missing
 ```
 
-Use the most specific exception. Never raise bare `Exception` or `RuntimeError`.
-
-### 6. Assembly Loading (`loader.py`)
+### 9. Assembly Loading (`loader.py`)
 
 `load_assemblies()` is idempotent (guarded by `_loaded` module flag). DLL discovery priority:
 1. Explicit `libs_dir` argument
 2. `RAWFILEREADER_LIBS` environment variable
-3. Auto-discovery: `../libs/`, `../Libs/`, `./libs/` relative to the package
+3. Auto-discovery: `libs/Net8/Assemblies/` next to the repo root, then `./libs/`
 
-Required DLLs:
-- `ThermoFisher.CommonCore.Data.dll`
-- `ThermoFisher.CommonCore.RawFileReader.dll`
-- `ThermoFisher.CommonCore.MassPrecisionEstimator.dll`
+DLLs bundled in `libs/Net8/Assemblies/`:
+- `ThermoFisher.CommonCore.Data.dll` (required)
+- `ThermoFisher.CommonCore.RawFileReader.dll` (required)
+- `ThermoFisher.CommonCore.MassPrecisionEstimator.dll` (required)
+- `ThermoFisher.CommonCore.BackgroundSubtraction.dll` (optional — loaded silently if present)
+- `OpenMcdf.dll`, `OpenMcdf.Extensions.dll` (required)
 
-Optional DLL (loaded silently if present):
-- `ThermoFisher.CommonCore.BackgroundSubtraction.dll`
+### 10. Context Manager
 
-### 7. Context Manager
-
-`RawFileAdapter` implements `__enter__` / `__exit__`. Always prefer using `with RawFileAdapter(...) as rf:` in examples and documentation.
+`RawFileAdapter` implements `__enter__` / `__exit__`. Always prefer `with RawFileAdapter(...) as rf:` in examples.
 
 ---
 
 ## Adding New Adapter Methods
 
-Follow this checklist:
-
 1. **Define the return type** as a `@dataclass` in `rawfilereader/models.py`.
-2. **Import the new dataclass** in `rawfilereader/adapter.py` (top-level import block).
-3. **Implement the method** on `RawFileAdapter`:
-   - Call `self._require_open()` at the top to guard against closed-file access.
-   - Use `self._raw_file` (the `IRawDataPlus` .NET object) to call .NET API.
+2. **Implement the method** in the appropriate mixin (`_headers.py`, `_scans.py`, `_logs.py`, `_averaging.py`, `_methods.py`, etc.).
+   - Call `self._check_open()` at the top.
+   - Use `self._raw_file` (the `IRawDataPlus` .NET proxy) to call .NET API.
    - Convert all .NET values to Python primitives before building the dataclass.
    - Document parameters and raises in a NumPy-style docstring.
-4. **Export the dataclass** from `rawfilereader/__init__.py` (both import and `__all__`).
-5. **Update README.md** with an API reference entry and, if appropriate, a usage example.
-
----
-
-## Scope
-
-Every public method on `RawFileAdapter` is a thin wrapper around one or more RawFileReader DLL calls. **Do not add pure-Python algorithms** (e.g. spectral math, cross-scan iteration helpers, diagnostic walkers). If a feature is not implemented by the underlying DLL, it does not belong in this adapter.
+3. **Export the dataclass** from `rawfilereader/__init__.py` (both import and `__all__`).
+4. **Update README.md** with an API reference entry and, if appropriate, a usage example.
 
 ---
 
 ## Public API Surface
 
-Everything exported from `rawfilereader/__init__.py` is public. Adding or removing exports is a breaking change. The current public names are:
+Everything exported from `rawfilereader/__init__.py` is public. Adding or removing exports is a breaking change.
 
-**Classes:** `RawFileAdapter`
+**Classes:** `RawFileAdapter`, `RawFileThreadManager`
 
-**Models:** `ScanInfo`, `CentroidData`, `ProfileData`, `ChromatogramData`, `InstrumentInfo`, `FileInfo`, `ScanStats`, `TrailerData`, `StatusLogEntry`, `ScanDependent`, `MassPrecision`, `BackgroundSubtractedSpectrum`
+**Models:** `AveragedScan`, `AutoSamplerInfo`, `BackgroundSubtractedSpectrum`, `CentroidData`, `ChromatogramData`, `ErrorLogEntry`, `FileInfo`, `InstrumentInfo`, `MassPrecision`, `ProfileData`, `RawFileError`, `RunHeaderInfo`, `SampleInfo`, `ScanDependent`, `ScanInfo`, `ScanStats`, `StatusLogEntry`, `SubtractedSpectrum`, `TrailerData`, `TuneData`
 
-**Exceptions:** `RawFileError`, `RawFileNotOpenError`, `RawFileInAcquisitionError`, `InstrumentSelectionError`, `ScanNotFoundError`
-
-Note: `AveragedScan` and `AssemblyLoadError` are defined internally but not currently exported via `__init__.py`.
+**Exceptions:** `AssemblyLoadError`, `InstrumentSelectionError`, `RawFileError`, `RawFileInAcquisitionError`, `RawFileNotOpenError`, `ScanNotFoundError`
 
 ---
 
 ## Development Setup
 
 ```bash
-# Install in editable mode with pythonnet
 pip install -e .
-
-# Download the RawFileReader DLLs using the included helper script
-python download_dlls.py                  # required DLLs → ./libs/, sets RAWFILEREADER_LIBS
-python download_dlls.py --include-optional  # also fetches BackgroundSubtraction.dll
-python download_dlls.py --libs-dir /path/to/dlls  # custom destination
-
-# Or set the env variable manually if you already have the DLLs
+# DLLs are bundled in libs/Net8/Assemblies/ — no separate download needed.
+# To use DLLs from a different location:
 export RAWFILEREADER_LIBS=/path/to/dlls
 ```
-
-DLLs must be the NetCore build from:
-`https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs/NetCore`
-
-### `download_dlls.py` flags
-
-| Flag | Description |
-|---|---|
-| `--libs-dir DIR` | Destination directory (default: `./libs/` next to the script) |
-| `--include-optional` | Also download `ThermoFisher.CommonCore.BackgroundSubtraction.dll` |
-| `--no-env` | Skip writing `RAWFILEREADER_LIBS` to the shell config file |
 
 ---
 
 ## Testing
 
-There are currently no automated tests in this repository. When adding tests:
-- Use `pytest` as the test runner.
-- Place tests under a `tests/` directory.
-- Tests that require real `.raw` files or the RawFileReader DLLs should be skipped when those resources are absent (use `pytest.importorskip` or a fixture that checks `RAWFILEREADER_LIBS`).
+There are currently no automated tests. When adding tests:
+- Use `pytest` as the test runner under a `tests/` directory.
+- Skip tests that need real `.raw` files or DLLs when those are absent (`pytest.importorskip` or a fixture that checks `RAWFILEREADER_LIBS`).
+- The pure-Python helpers in `_averaging.py` (`_apply_mass_range`, `_normalize_to_tic`, `_find_closest`, `_linear_interp`) can be tested without any DLLs.
 
 ---
 
@@ -196,7 +210,8 @@ There are currently no automated tests in this repository. When adding tests:
 ## Key .NET Concepts (for context)
 
 - `IRawDataPlus` — the main .NET interface representing an open RAW file.
-- `Device` — a .NET enum for instrument device types (`MS`, `UV`, `PDA`, etc.). The string constants in `RawFileAdapter.DEVICE_TYPES` match these enum member names.
+- `IScanAveragePlus` — interface with `AverageScans`, `AverageScansInScanRange`, `AverageScansInTimeRange`, `SubtractScans`.
+- `Device` — .NET enum for instrument device types (`MS`, `UV`, `PDA`, etc.).
 - `RawFileReaderAdapter.FileFactory(path)` — static factory that opens the file and returns an `IRawDataPlus`.
 - Scan numbers in RawFileReader are **1-based**.
 - Scan filters are human-readable strings like `"FTMS + p NSI Full ms [200.00-2000.00]"`.

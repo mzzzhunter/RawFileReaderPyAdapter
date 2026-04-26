@@ -25,6 +25,7 @@ from .models import (
     ScanInfo,
     ScanStats,
     StatusLogEntry,
+    SubtractedSpectrum,
     TrailerData,
     TuneData,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "ScanInfo",
     "ScanStats",
     "StatusLogEntry",
+    "SubtractedSpectrum",
     "TrailerData",
     "TuneData",
     # Exceptions

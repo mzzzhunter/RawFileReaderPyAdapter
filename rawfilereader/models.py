@@ -212,6 +212,30 @@ class AveragedScan:
 
 
 @dataclass
+class SubtractedSpectrum:
+    """
+    Result of subtracting one mass spectrum from another (scan_a − scan_b).
+
+    Both input scans must share the same scan filter string.  Intensities are
+    the signed difference; ``intensities_clipped`` zeros out any negative
+    values (i.e. peaks present only in scan_b are removed).
+    """
+    scan_a: int
+    scan_b: int
+    scan_filter: str
+    mass_range: Optional[Tuple[float, float]]
+    is_centroid: bool
+    masses: List[float]
+    intensities: List[float]
+    intensities_clipped: List[float]
+
+    @property
+    def peaks(self) -> List[Tuple[float, float]]:
+        """Return ``(mass, intensity)`` tuples using the clipped intensities."""
+        return [(m, i) for m, i in zip(self.masses, self.intensities_clipped) if i > 0]
+
+
+@dataclass
 class BackgroundSubtractedSpectrum:
     """
     Result of background subtraction using the Thermo Fisher BackgroundSubtractor.
