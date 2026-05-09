@@ -293,6 +293,8 @@ class RawFileAdapter:
         self._MassRange = None
         self._MassOptions = None
         self._BackgroundSubtractor = None
+        self._ScanAveragerPlus = None
+        self._Scan = None
         self._DotNetList = None
         self._Int32 = None
         self._Array = None
@@ -345,9 +347,13 @@ class RawFileAdapter:
             ChromatogramTraceSettings,
             MassOptions,
             Range as MassRange,
+            Scan,
             TraceType,
         )
-        from ThermoFisher.CommonCore.BackgroundSubtraction import BackgroundSubtractor  # type: ignore
+        from ThermoFisher.CommonCore.BackgroundSubtraction import (  # type: ignore
+            BackgroundSubtractor,
+            ScanAveragerPlus,
+        )
         from System.Collections.Generic import List as DotNetList  # type: ignore
         from System import Int32, Array, Enum as DotNetEnum  # type: ignore
         # -------------------------------------------------------------------
@@ -356,6 +362,8 @@ class RawFileAdapter:
         self._MassRange = MassRange
         self._MassOptions = MassOptions
         self._BackgroundSubtractor = BackgroundSubtractor
+        self._ScanAveragerPlus = ScanAveragerPlus
+        self._Scan = Scan
         self._DotNetList = DotNetList
         self._Int32 = Int32
         self._Array = Array
@@ -1260,7 +1268,7 @@ class RawFileAdapter:
         mass_range: Optional[Tuple[float, float]] = None,
     ) -> BackgroundSubtractedSpectrum:
         """
-        Remove background from *scan_number* using the Thermo Fisher BackgroundSubtractor.
+        Remove background from *scan_number* using Thermo Fisher scan subtraction.
 
         Parameters
         ----------
@@ -1280,36 +1288,17 @@ class RawFileAdapter:
             self._check_scan(bg)
 
         scan_filter = self._raw_file.GetFilterForScanNumber(scan_number).ToString()
-        fg_centroid = self._raw_file.GetCentroidStream(scan_number, False)
 
-        if len(background_scan_numbers) == 1:
-            bg_centroid = self._raw_file.GetCentroidStream(background_scan_numbers[0], False)
-            subtractor = self._BackgroundSubtractor()
-            result = subtractor.Subtract(fg_centroid, bg_centroid)
-            masses = [float(m) for m in result.Masses] if result and result.Masses else []
-            intensities = [float(i) for i in result.Intensities] if result and result.Intensities else []
-        else:
-            try:
-                dn_list = self._DotNetList[self._Int32]()
-                for s in background_scan_numbers:
-                    dn_list.Add(self._Int32(s))
-                opts = self._MassOptions()
-                bg_centroid = self._raw_file.AverageScans(dn_list, opts)
-                subtractor = self._BackgroundSubtractor()
-                result = subtractor.Subtract(fg_centroid, bg_centroid)
-                masses = [float(m) for m in result.Masses] if result and result.Masses else []
-                intensities = [float(i) for i in result.Intensities] if result and result.Intensities else []
-            except AttributeError:
-                # AverageScans not available in this DLL version — pure-Python fallback
-                fg_masses = [float(m) for m in fg_centroid.Masses] if fg_centroid and fg_centroid.Masses else []
-                fg_intensities = [float(i) for i in fg_centroid.Intensities] if fg_centroid and fg_centroid.Intensities else []
-                bg_masses_list, bg_intensities_list = [], []
-                for bg in background_scan_numbers:
-                    s = self._raw_file.GetCentroidStream(bg, False)
-                    bg_masses_list.append([float(m) for m in s.Masses] if s and s.Masses else [])
-                    bg_intensities_list.append([float(i) for i in s.Intensities] if s and s.Intensities else [])
-                avg_bg_masses, avg_bg_intensities = _average_centroid_peaks(bg_masses_list, bg_intensities_list)
-                masses, intensities = _py_subtract_peaks(fg_masses, fg_intensities, avg_bg_masses, avg_bg_intensities)
+        try:
+            fg_scan = self._Scan.FromDetector(self._raw_file, self._Int32(scan_number))
+            bg_scan = self._make_background_scan(background_scan_numbers)
+            opts = self._MassOptions()
+            averager = self._ScanAveragerPlus.FromFile(self._raw_file)
+            result = _reflect_call(averager, "SubtractScans", fg_scan, bg_scan, opts)
+            masses = [float(m) for m in result.PreferredMasses] if result and result.PreferredMasses else []
+            intensities = [float(i) for i in result.PreferredIntensities] if result and result.PreferredIntensities else []
+        except Exception:
+            masses, intensities = self._subtract_background_python(scan_number, background_scan_numbers)
 
         if mass_range is not None:
             masses, intensities = _apply_mass_range(masses, intensities, mass_range)
@@ -1321,3 +1310,36 @@ class RawFileAdapter:
             masses=masses,
             intensities=intensities,
         )
+
+    def _make_background_scan(self, background_scan_numbers: List[int]):
+        """Return a native Scan for one background scan or an average of many."""
+        if len(background_scan_numbers) == 1:
+            return self._Scan.FromDetector(self._raw_file, self._Int32(background_scan_numbers[0]))
+
+        dn_list = self._DotNetList[self._Int32]()
+        for scan_number in background_scan_numbers:
+            dn_list.Add(self._Int32(scan_number))
+
+        opts = self._MassOptions()
+        averager = self._ScanAveragerPlus.FromFile(self._raw_file)
+        return _reflect_call(averager, "AverageScans", dn_list, opts, False)
+
+    def _subtract_background_python(
+        self,
+        scan_number: int,
+        background_scan_numbers: List[int],
+    ) -> Tuple[List[float], List[float]]:
+        """Fallback background subtraction using centroid peak matching."""
+        fg_centroid = self._raw_file.GetCentroidStream(scan_number, False)
+        fg_masses = [float(m) for m in fg_centroid.Masses] if fg_centroid and fg_centroid.Masses else []
+        fg_intensities = [float(i) for i in fg_centroid.Intensities] if fg_centroid and fg_centroid.Intensities else []
+
+        bg_masses_list: List[List[float]] = []
+        bg_intensities_list: List[List[float]] = []
+        for bg in background_scan_numbers:
+            stream = self._raw_file.GetCentroidStream(bg, False)
+            bg_masses_list.append([float(m) for m in stream.Masses] if stream and stream.Masses else [])
+            bg_intensities_list.append([float(i) for i in stream.Intensities] if stream and stream.Intensities else [])
+
+        avg_bg_masses, avg_bg_intensities = _average_centroid_peaks(bg_masses_list, bg_intensities_list)
+        return _py_subtract_peaks(fg_masses, fg_intensities, avg_bg_masses, avg_bg_intensities)
