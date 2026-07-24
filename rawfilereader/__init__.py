@@ -6,6 +6,7 @@ Uses pythonnet (clr) to bridge Python and .NET.
 """
 
 from .adapter import RawFileAdapter
+from .loader import assembly_diagnostics
 from .models import (
     AveragedScan,
     BackgroundSubtractedSpectrum,
@@ -35,8 +36,9 @@ from .exceptions import (
 
 __version__ = "2.0.0"
 __all__ = [
-    # Main class
+    # Main class and diagnostics
     "RawFileAdapter",
+    "assembly_diagnostics",
     # Models
     "AveragedScan",
     "BackgroundSubtractedSpectrum",
