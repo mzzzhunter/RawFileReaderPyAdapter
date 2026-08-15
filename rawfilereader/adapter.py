@@ -273,7 +273,7 @@ class RawFileAdapter:
         1-based device instance number (default ``1``).
     """
 
-    DEVICE_TYPES = ("MS", "MSAnalog", "UV", "PDA", "Analog", "ADCard", "Lyra")
+    DEVICE_TYPES = ("MS", "MSAnalog", "Analog", "UV", "Pda", "Other")
 
     def __init__(
         self,
@@ -375,13 +375,30 @@ class RawFileAdapter:
         self._ChromatogramSignal = ChromatogramSignal
 
         raw = RawFileReaderAdapter.FileFactory(self._path)
-        if not raw.IsOpen or raw.IsError:
-            raise RawFileNotOpenError(f"RawFileReader could not open: {self._path}")
-        if raw.InAcquisition:
-            raise RawFileInAcquisitionError(f"File is still being acquired: {self._path}")
+        try:
+            if not raw.IsOpen or raw.IsError:
+                raise RawFileNotOpenError(
+                    f"RawFileReader could not open: {self._path}"
+                )
+            if raw.InAcquisition:
+                raise RawFileInAcquisitionError(
+                    f"File is still being acquired: {self._path}"
+                )
 
-        self._raw_file = raw
-        self.select_instrument(self._instrument_type, self._instrument_instance)
+            self._raw_file = raw
+            self.select_instrument(self._instrument_type, self._instrument_instance)
+        except BaseException:
+            # FileFactory transfers ownership of a native resource to us even
+            # when validation or initial instrument selection fails.  Dispose
+            # it here because close() cannot safely own a partially opened file.
+            self._raw_file = None
+            try:
+                raw.Dispose()
+            except Exception:
+                # Preserve the exception that caused open() to fail; disposal
+                # errors are secondary and must not obscure that diagnosis.
+                pass
+            raise
 
     def close(self) -> None:
         """Close the RAW file and release .NET resources."""
@@ -412,7 +429,7 @@ class RawFileAdapter:
     def _get_device(self, device_type: str):
         """Resolve a device-type string to the .NET Device enum value."""
         try:
-            return self._DotNetEnum.Parse(self._Device, device_type)
+            return self._DotNetEnum.Parse(self._Device, device_type, True)
         except Exception:
             raise InstrumentSelectionError(
                 f"Unknown device type '{device_type}'. "
@@ -441,6 +458,8 @@ class RawFileAdapter:
             raise InstrumentSelectionError(
                 f"Cannot select {device_type} instance {instance}: {exc}"
             ) from exc
+        self._instrument_type = device_type
+        self._instrument_instance = instance
 
     def get_instrument_count(self) -> int:
         """Return the total number of instrument devices in the file."""

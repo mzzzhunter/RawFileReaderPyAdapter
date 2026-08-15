@@ -32,8 +32,8 @@ from .exceptions import (
     InstrumentSelectionError,
     ScanNotFoundError,
 )
+from ._version import __version__
 
-__version__ = "2.0.0"
 __all__ = [
     # Main class
     "RawFileAdapter",

@@ -124,7 +124,7 @@ Create a new adapter instance.
 |---|---|---|
 | `raw_file_path` | `str` | Path to the `.raw` file |
 | `libs_dir` | `str \| None` | Override path to the DLL directory |
-| `instrument_type` | `str` | Device type to select on open (`"MS"`, `"UV"`, `"PDA"`, `"Analog"`, `"MSAnalog"`) |
+| `instrument_type` | `str` | Device type to select on open (`"MS"`, `"UV"`, `"Pda"`, `"Analog"`, `"MSAnalog"`, `"Other"`); matching is case-insensitive |
 | `instrument_instance` | `int` | 1-based device instance number |
 
 ```python

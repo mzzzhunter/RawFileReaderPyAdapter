@@ -42,7 +42,7 @@ class FileInfo:
 @dataclass
 class InstrumentInfo:
     """Per-device instrument metadata."""
-    device_type: str        # e.g. "MS", "UV", "PDA", "Analog"
+    device_type: str        # e.g. "MS", "UV", "Pda", "Analog"
     instance_number: int
     name: str
     model: str
