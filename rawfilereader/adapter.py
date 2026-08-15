@@ -375,13 +375,30 @@ class RawFileAdapter:
         self._ChromatogramSignal = ChromatogramSignal
 
         raw = RawFileReaderAdapter.FileFactory(self._path)
-        if not raw.IsOpen or raw.IsError:
-            raise RawFileNotOpenError(f"RawFileReader could not open: {self._path}")
-        if raw.InAcquisition:
-            raise RawFileInAcquisitionError(f"File is still being acquired: {self._path}")
+        try:
+            if not raw.IsOpen or raw.IsError:
+                raise RawFileNotOpenError(
+                    f"RawFileReader could not open: {self._path}"
+                )
+            if raw.InAcquisition:
+                raise RawFileInAcquisitionError(
+                    f"File is still being acquired: {self._path}"
+                )
 
-        self._raw_file = raw
-        self.select_instrument(self._instrument_type, self._instrument_instance)
+            self._raw_file = raw
+            self.select_instrument(self._instrument_type, self._instrument_instance)
+        except BaseException:
+            # FileFactory transfers ownership of a native resource to us even
+            # when validation or initial instrument selection fails.  Dispose
+            # it here because close() cannot safely own a partially opened file.
+            self._raw_file = None
+            try:
+                raw.Dispose()
+            except Exception:
+                # Preserve the exception that caused open() to fail; disposal
+                # errors are secondary and must not obscure that diagnosis.
+                pass
+            raise
 
     def close(self) -> None:
         """Close the RAW file and release .NET resources."""
