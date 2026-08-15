@@ -458,6 +458,8 @@ class RawFileAdapter:
             raise InstrumentSelectionError(
                 f"Cannot select {device_type} instance {instance}: {exc}"
             ) from exc
+        self._instrument_type = device_type
+        self._instrument_instance = instance
 
     def get_instrument_count(self) -> int:
         """Return the total number of instrument devices in the file."""
