@@ -278,7 +278,7 @@ rawfilereader/  (importable as `rawfilereader`, PyPI: rawfilereader-python)
 │   │       Used to align two profile grids before subtraction.
 │   │
 │   └── class RawFileAdapter
-│       │   DEVICE_TYPES dict: "MS" | "UV" | "PDA" | "Analog" | "Other"
+│       │   DEVICE_TYPES: "MS" | "MSAnalog" | "Analog" | "UV" | "Pda" | "Other"
 │       │                      → .NET Device enum member name
 │       │
 │       ├── ── Lifecycle ──────────────────────────────────────────────────

@@ -273,7 +273,7 @@ class RawFileAdapter:
         1-based device instance number (default ``1``).
     """
 
-    DEVICE_TYPES = ("MS", "MSAnalog", "UV", "PDA", "Analog", "ADCard", "Lyra")
+    DEVICE_TYPES = ("MS", "MSAnalog", "Analog", "UV", "Pda", "Other")
 
     def __init__(
         self,
@@ -429,7 +429,7 @@ class RawFileAdapter:
     def _get_device(self, device_type: str):
         """Resolve a device-type string to the .NET Device enum value."""
         try:
-            return self._DotNetEnum.Parse(self._Device, device_type)
+            return self._DotNetEnum.Parse(self._Device, device_type, True)
         except Exception:
             raise InstrumentSelectionError(
                 f"Unknown device type '{device_type}'. "

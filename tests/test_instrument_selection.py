@@ -35,7 +35,9 @@ def make_open_adapter(raw_file):
     )
     adapter._raw_file = raw_file
     adapter._Device = object()
-    adapter._DotNetEnum = SimpleNamespace(Parse=lambda enum_type, value: value)
+    adapter._DotNetEnum = SimpleNamespace(
+        Parse=lambda enum_type, value, ignore_case: value
+    )
     return adapter
 
 
@@ -60,3 +62,17 @@ def test_select_instrument_keeps_previous_selection_when_dotnet_call_fails():
 
     assert adapter._instrument_type == "MS"
     assert adapter._instrument_instance == 1
+
+
+def test_device_names_are_parsed_case_insensitively():
+    adapter = make_open_adapter(FakeRawFile())
+    parse_calls = []
+    adapter._DotNetEnum = SimpleNamespace(
+        Parse=lambda enum_type, value, ignore_case: parse_calls.append(
+            (enum_type, value, ignore_case)
+        )
+        or "Pda"
+    )
+
+    assert adapter._get_device("PDA") == "Pda"
+    assert parse_calls == [(adapter._Device, "PDA", True)]
