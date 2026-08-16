@@ -73,20 +73,27 @@ libs/Net8/Assemblies/
 
 ## Installation
 
-```bash
-# Install Python dependencies
-pip install pythonnet
-
-# Clone / install this package
-pip install .
-```
-
-Or directly from source:
+Clone the repository and install the package, including its `pythonnet`
+dependency:
 
 ```bash
 git clone https://github.com/mzzzhunter/RawFileReaderPyAdapter.git
 cd RawFileReaderPyAdapter
-pip install -r requirements.txt
+python -m pip install .
+```
+
+For an editable development installation, use:
+
+```bash
+python -m pip install -e .
+```
+
+Installing only `requirements.txt` is not sufficient: it installs the
+dependencies but does not install the `rawfilereader` package itself. Verify
+the installation from outside the repository directory with:
+
+```bash
+python -c "import rawfilereader; print(rawfilereader.__version__)"
 ```
 
 ---
