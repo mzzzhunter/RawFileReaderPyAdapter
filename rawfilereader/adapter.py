@@ -763,6 +763,10 @@ class RawFileAdapter:
         Python if the method is not available on this DLL version.
         """
         self._check_open()
+        if first_scan > last_scan:
+            raise ValueError("first_scan must be less than or equal to last_scan.")
+        self._check_scan(first_scan)
+        self._check_scan(last_scan)
         opts = self._MassOptions()
         try:
             avg = _reflect_call(
@@ -773,19 +777,21 @@ class RawFileAdapter:
             intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
             return AveragedScan(first_scan=first_scan, last_scan=last_scan,
                                 masses=masses, intensities=intensities)
-        except (AttributeError, Exception):
+        except AttributeError:
             pass
 
         # Python fallback
         scan_masses: List[List[float]] = []
         scan_intensities: List[List[float]] = []
         for scan_num in range(first_scan, last_scan + 1):
-            try:
-                data = self.get_centroid_stream(scan_num)
-                scan_masses.append(data.masses)
-                scan_intensities.append(data.intensities)
-            except Exception:
+            if (
+                filter_string is not None
+                and self.get_filter_for_scan(scan_num) != filter_string
+            ):
                 continue
+            data = self.get_centroid_stream(scan_num)
+            scan_masses.append(data.masses)
+            scan_intensities.append(data.intensities)
         masses, intensities = _average_centroid_peaks(scan_masses, scan_intensities)
         return AveragedScan(first_scan=first_scan, last_scan=last_scan,
                             masses=masses, intensities=intensities)
@@ -797,6 +803,10 @@ class RawFileAdapter:
         first; falls back to per-scan centroid reads merged in Python.
         """
         self._check_open()
+        if not scan_numbers:
+            raise ValueError("scan_numbers must contain at least one scan number.")
+        for scan_number in scan_numbers:
+            self._check_scan(scan_number)
         opts = self._MassOptions()
         try:
             dn_list = self._DotNetList[self._Int32]()
@@ -807,19 +817,16 @@ class RawFileAdapter:
             intensities = [float(i) for i in avg.PreferredIntensities] if avg.PreferredIntensities else []
             return AveragedScan(first_scan=min(scan_numbers), last_scan=max(scan_numbers),
                                 masses=masses, intensities=intensities)
-        except (AttributeError, Exception):
+        except AttributeError:
             pass
 
         # Python fallback
         scan_masses: List[List[float]] = []
         scan_intensities: List[List[float]] = []
         for scan_num in scan_numbers:
-            try:
-                data = self.get_centroid_stream(scan_num)
-                scan_masses.append(data.masses)
-                scan_intensities.append(data.intensities)
-            except Exception:
-                continue
+            data = self.get_centroid_stream(scan_num)
+            scan_masses.append(data.masses)
+            scan_intensities.append(data.intensities)
         masses, intensities = _average_centroid_peaks(scan_masses, scan_intensities)
         return AveragedScan(first_scan=min(scan_numbers), last_scan=max(scan_numbers),
                             masses=masses, intensities=intensities)

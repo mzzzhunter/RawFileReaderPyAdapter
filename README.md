@@ -371,6 +371,10 @@ avg = rf.average_scans_in_range(1, 50)
 print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 ```
 
+Both bounds must be valid scan numbers and `first_scan` must not exceed
+`last_scan`. Native averaging errors are propagated; the Python fallback is
+used only when the native averaging method is unavailable.
+
 #### `average_scans(scan_numbers) -> AveragedScan`
 
 ```python
@@ -378,6 +382,8 @@ print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 scan_list = [10, 20, 30, 40, 50]
 avg = rf.average_scans(scan_list)
 ```
+
+The list must not be empty and every entry must be a valid scan number.
 
 ---
 

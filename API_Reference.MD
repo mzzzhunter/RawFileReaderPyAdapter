@@ -557,6 +557,10 @@ Averages scans between two scan numbers, inclusive.
 |---|---|
 | [`AveragedScan`](#averagedscan) | Averaged m/z and intensity arrays for the range. |
 
+Raises `ValueError` for reversed bounds and `ScanNotFoundError` when either
+bound is outside the file's scan range. Native averaging failures are not
+silently replaced with partial results.
+
 #### `average_scans(scan_numbers)`
 
 Averages an arbitrary list of scan numbers.
@@ -568,6 +572,9 @@ Averages an arbitrary list of scan numbers.
 | Output | Description |
 |---|---|
 | [`AveragedScan`](#averagedscan) | Averaged m/z and intensity arrays. `first_scan` and `last_scan` reflect the min/max input scan number. |
+
+Raises `ValueError` for an empty list and `ScanNotFoundError` if any requested
+scan is outside the file's scan range.
 
 #### `get_chromatogram(trace_type="BasePeak", mass_range="", start_scan=-1, end_scan=-1)`
 
