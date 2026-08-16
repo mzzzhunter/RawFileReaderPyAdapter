@@ -173,14 +173,13 @@ class AveragedScan:
 @dataclass
 class BackgroundSubtractedSpectrum:
     """
-    Result of background subtraction using the Thermo Fisher BackgroundSubtractor.
+    Result of native or Python-fallback background subtraction.
 
     Produced by :meth:`RawFileAdapter.subtract_background`.
     Requires ``ThermoFisher.CommonCore.BackgroundSubtraction.dll``.
 
-    Unlike :class:`SubtractedSpectrum` (which computes scan A − scan B),
-    this model is the output of Thermo's proprietary background-removal
-    algorithm, which is aware of the instrument noise model.
+    Unlike :class:`SubtractedSpectrum` (which preserves signed scan A − scan B
+    intensities), this result contains surviving foreground peaks.
     """
     scan_number: int
     background_scans: List[int]   # scan numbers used as background

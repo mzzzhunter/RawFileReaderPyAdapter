@@ -44,7 +44,7 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 |---|---|
 | Python | ≥ 3.8 |
 | pythonnet | ≥ 3.0.3 |
-| .NET Runtime | ≥ 6.0 (for `NetCore` DLLs) or .NET Framework ≥ 4.5.1 — **recommend .NET 8.0 on macOS and Linux** |
+| .NET Runtime | .NET 8.0 for the bundled `libs/Net8` assemblies |
 | RawFileReader DLLs | Latest from [thermofisherlsms/RawFileReader](https://github.com/thermofisherlsms/RawFileReader/tree/main/Libs) |
 
 ### Required DLLs
@@ -169,14 +169,14 @@ with RawFileAdapter("sample.raw") as rf:
     pass
 ```
 
-#### `open()` / `close()` / `is_open() -> bool`
+#### `open()` / `close()` / `is_open -> bool`
 
 ```python
 rf = RawFileAdapter("sample.raw")
 rf.open()
-print(rf.is_open())   # True
+print(rf.is_open)   # True
 rf.close()
-print(rf.is_open())   # False
+print(rf.is_open)   # False
 ```
 
 ---
@@ -189,8 +189,10 @@ Select a specific device for subsequent reads.
 
 ```python
 with RawFileAdapter("sample.raw") as rf:
-    rf.select_instrument("UV", 1)   # switch to UV detector
-    rf.select_instrument("MS", 1)   # switch back to MS
+    if rf.get_instrument_count_of_type("UV"):
+        rf.select_instrument("UV", 1)
+        print(rf.get_instrument_data().name)
+    rf.select_instrument("MS", 1)
 ```
 
 #### `get_instrument_count() -> int`
@@ -236,6 +238,23 @@ print(fi.sample_name)
 print(fi.sample_id)
 print(fi.instrument_name)
 print(fi.instrument_serial_number)
+```
+
+#### `get_run_header_info() -> RunHeaderInfo`
+
+```python
+header = rf.get_run_header_info()
+print(f"Scans: {header.first_scan}–{header.last_scan}")
+print(f"Mass range: {header.low_mass:.1f}–{header.high_mass:.1f}")
+print(f"Run time: {header.start_time:.2f}–{header.end_time:.2f} min")
+```
+
+#### `get_file_error() -> FileError`
+
+```python
+file_error = rf.get_file_error()
+if file_error.has_error:
+    print(file_error.error_code, file_error.error_message)
 ```
 
 #### `get_instrument_method(index=0) -> str`
@@ -308,8 +327,23 @@ print(filt)
 ```python
 ev = rf.get_scan_event_for_scan(1)
 print(ev["MSOrder"])   # 1
-print(ev["Polarity"])  # "Positive"
-print(ev["Detector"])  # "FTMS"
+print(ev.get("Polarity"))
+print(ev.get("Detector"))
+```
+
+#### `get_filtered_scan_numbers(filter_string, start_scan=None, end_scan=None) -> List[int]`
+
+```python
+scan_filter = rf.get_filters()[0]
+matching_scans = rf.get_filtered_scan_numbers(scan_filter, start_scan=1, end_scan=500)
+```
+
+#### `iterate_filtered_scans(filter_string, start_time=None, end_time=None) -> Iterator[int]`
+
+```python
+scan_filter = rf.get_filters()[0]
+for scan_number in rf.iterate_filtered_scans(scan_filter, start_time=1.0, end_time=5.0):
+    print(scan_number)
 ```
 
 ---
@@ -348,6 +382,19 @@ for m, i, n, r in zip(centroid.masses, centroid.intensities,
     print(f"  m/z={m:.4f}  SNR={snr:.1f}  R={r:.0f}")
 ```
 
+#### `get_mass_precision(scan_number) -> List[MassPrecision]`
+
+Returns mass-accuracy estimates for supported high-resolution scans. An empty
+list is returned when the estimator is unavailable or produces no result.
+
+```python
+for estimate in rf.get_mass_precision(1):
+    print(
+        f"m/z={estimate.mass:.5f} "
+        f"accuracy={estimate.mz_accuracy_ppm:.2f} ppm"
+    )
+```
+
 ---
 
 ### Spectral Data – Profile
@@ -384,10 +431,13 @@ print(f"Is centroid     : {info.is_centroid}")
 
 # For MS2+:
 if info.ms_order >= 2:
-    print(f"Precursor m/z   : {info.precursor_mass:.4f}")
+    if info.precursor_mass is not None:
+        print(f"Precursor m/z   : {info.precursor_mass:.4f}")
     print(f"Charge state    : {info.precursor_charge}")
-    print(f"Collision energy: {info.collision_energy:.1f} eV")
-    print(f"Isolation width : {info.isolation_width:.2f} Th")
+    if info.collision_energy is not None:
+        print(f"Collision energy: {info.collision_energy:.1f} eV")
+    if info.isolation_width is not None:
+        print(f"Isolation width : {info.isolation_width:.2f} Th")
 ```
 
 ---
@@ -419,7 +469,7 @@ The list must not be empty and every entry must be a valid scan number.
 
 ### Chromatograms
 
-#### `get_chromatogram(trace_type, mass_range, start_scan, end_scan) -> ChromatogramData`
+#### `get_chromatogram(trace_type="BasePeak", mass_range="", start_scan=-1, end_scan=-1) -> ChromatogramData`
 
 ```python
 # Total ion chromatogram (TIC)
@@ -549,7 +599,7 @@ Subtract the spectrum of *scan_b* from *scan_a* (A − B).
 
 **Rules**
 - Both scans **must share the same scan filter string** (same analyzer, polarity, MS order, and mass range).  A `ValueError` is raised if they differ.
-- Subtraction is performed in **centroid space** when either scan is a centroid (FTMS) scan, and in **profile space** when both are profile scans.
+- Subtraction is performed in **centroid space** when the shared filter contains `FTMS`; otherwise it is performed in **profile space**.
 - Centroid peaks are matched by m/z within `mass_tolerance_ppm`.  Unmatched peaks from scan_a pass through unchanged; unmatched peaks from scan_b appear as negative entries.
 - Profile spectra are aligned by linearly interpolating scan_b onto scan_a's m/z grid.
 
@@ -605,12 +655,11 @@ with RawFileAdapter("sample.raw") as rf:
 
 #### `subtract_background(scan_number, background_scan_numbers, mass_range=None) -> BackgroundSubtractedSpectrum`
 
-Remove background from a scan using Thermo Fisher's proprietary
-`BackgroundSubtractor` algorithm.  Unlike `subtract_spectra` (which does a
-simple peak-by-peak A − B difference), this method delegates to the Thermo
-`ThermoFisher.CommonCore.BackgroundSubtraction.dll` noise-aware algorithm.
-The DLL is **optional** — place it in the `libs/` directory alongside the other
-RawFileReader DLLs to enable this method.
+Remove background from a scan. The method first attempts Thermo's native scan
+subtraction through `ThermoFisher.CommonCore.BackgroundSubtraction.dll` and
+falls back to Python centroid peak matching if that native operation fails.
+Unlike `subtract_spectra`, the returned intensities contain only positive
+foreground peaks.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -657,9 +706,8 @@ with RawFileAdapter("sample.raw") as rf:
 | `intensities` | Background-subtracted intensities |
 | `peaks` | Property — `(mass, intensity)` tuples for all peaks |
 
-> **Requires** `ThermoFisher.CommonCore.BackgroundSubtraction.dll` in the libs
-> directory.  An `AssemblyLoadError` is raised with a descriptive message if
-> the DLL is absent.
+> `ThermoFisher.CommonCore.BackgroundSubtraction.dll` is part of the required
+> assembly set loaded when the adapter opens a file.
 
 ---
 
@@ -680,8 +728,11 @@ All methods return plain Python dataclasses — no .NET objects leak through.
 | `StatusLogEntry` | `retention_time`, `fields` (dict) |
 | `ScanDependent` | `scan_number`, `dependent_scan_numbers` |
 | `AveragedScan` | `first_scan`, `last_scan`, `masses`, `intensities` |
+| `MassPrecision` | `mass`, `intensity`, `resolution`, `mz_accuracy_ppm`, `mz_accuracy_mmu` |
+| `RunHeaderInfo` | `first_scan`, `last_scan`, `start_time`, `end_time`, `low_mass`, `high_mass`, `spectra_count` |
+| `FileError` | `has_error`, `error_code`, `error_message` |
 | `SubtractedSpectrum` | `scan_a`, `scan_b`, `scan_filter`, `mass_range`, `is_centroid`, `masses`, `intensities`, `intensities_clipped`, `peaks` |
-| `BackgroundSubtractedSpectrum` | `scan_number`, `background_scans`, `scan_filter`, `masses`, `intensities`, `peaks` — requires `BackgroundSubtraction.dll` |
+| `BackgroundSubtractedSpectrum` | `scan_number`, `background_scans`, `scan_filter`, `masses`, `intensities`, `peaks` |
 
 ---
 
