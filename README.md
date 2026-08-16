@@ -10,6 +10,7 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Testing](#testing)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
   - [Opening and Closing Files](#opening-and-closing-files)
@@ -95,6 +96,28 @@ the installation from outside the repository directory with:
 ```bash
 python -c "import rawfilereader; print(rawfilereader.__version__)"
 ```
+
+---
+
+## Testing
+
+Run the complete test suite with:
+
+```bash
+python -m pytest -q
+```
+
+The real RAW-file test is skipped automatically when .NET or `sample.raw` is
+unavailable. To run only tests that do not require those integration
+prerequisites:
+
+```bash
+python -m pytest -m "not integration" -q
+```
+
+`tests/rawfilereader_integration.ipynb` provides the same core checks in a
+Google Colab-compatible notebook. GitHub Actions runs the unit suite on every
+push and pull request.
 
 ---
 
