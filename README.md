@@ -10,6 +10,7 @@ A comprehensive Python wrapper around the [Thermo Fisher Scientific RawFileReade
 
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Testing](#testing)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
   - [Opening and Closing Files](#opening-and-closing-files)
@@ -73,21 +74,50 @@ libs/Net8/Assemblies/
 
 ## Installation
 
-```bash
-# Install Python dependencies
-pip install pythonnet
-
-# Clone / install this package
-pip install .
-```
-
-Or directly from source:
+Clone the repository and install the package, including its `pythonnet`
+dependency:
 
 ```bash
 git clone https://github.com/mzzzhunter/RawFileReaderPyAdapter.git
 cd RawFileReaderPyAdapter
-pip install -r requirements.txt
+python -m pip install .
 ```
+
+For an editable development installation, use:
+
+```bash
+python -m pip install -e .
+```
+
+Installing only `requirements.txt` is not sufficient: it installs the
+dependencies but does not install the `rawfilereader` package itself. Verify
+the installation from outside the repository directory with:
+
+```bash
+python -c "import rawfilereader; print(rawfilereader.__version__)"
+```
+
+---
+
+## Testing
+
+Run the complete test suite with:
+
+```bash
+python -m pytest -q
+```
+
+The real RAW-file test is skipped automatically when .NET or `sample.raw` is
+unavailable. To run only tests that do not require those integration
+prerequisites:
+
+```bash
+python -m pytest -m "not integration" -q
+```
+
+`tests/rawfilereader_integration.ipynb` provides the same core checks in a
+Google Colab-compatible notebook. GitHub Actions runs the unit suite on every
+push and pull request.
 
 ---
 
@@ -124,7 +154,7 @@ Create a new adapter instance.
 |---|---|---|
 | `raw_file_path` | `str` | Path to the `.raw` file |
 | `libs_dir` | `str \| None` | Override path to the DLL directory |
-| `instrument_type` | `str` | Device type to select on open (`"MS"`, `"UV"`, `"PDA"`, `"Analog"`, `"MSAnalog"`) |
+| `instrument_type` | `str` | Device type to select on open (`"MS"`, `"UV"`, `"Pda"`, `"Analog"`, `"MSAnalog"`, `"Other"`); matching is case-insensitive |
 | `instrument_instance` | `int` | 1-based device instance number |
 
 ```python
@@ -371,6 +401,10 @@ avg = rf.average_scans_in_range(1, 50)
 print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 ```
 
+Both bounds must be valid scan numbers and `first_scan` must not exceed
+`last_scan`. Native averaging errors are propagated; the Python fallback is
+used only when the native averaging method is unavailable.
+
 #### `average_scans(scan_numbers) -> AveragedScan`
 
 ```python
@@ -378,6 +412,8 @@ print(f"Averaged {avg.first_scan}–{avg.last_scan}: {len(avg.masses)} peaks")
 scan_list = [10, 20, 30, 40, 50]
 avg = rf.average_scans(scan_list)
 ```
+
+The list must not be empty and every entry must be a valid scan number.
 
 ---
 
