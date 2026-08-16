@@ -75,6 +75,27 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
     if _loaded:
         return
 
+    # Resolve and validate the complete assembly set before changing runtime
+    # state, sys.path, or loading any assemblies.
+    search_dir = Path(libs_dir) if libs_dir else _find_libs_dir()
+    if search_dir is None or not search_dir.is_dir():
+        raise AssemblyLoadError(
+            "Cannot locate the RawFileReader DLL directory.  "
+            "Set the RAWFILEREADER_LIBS environment variable to the folder that "
+            "contains ThermoFisher.CommonCore.*.dll files, or pass libs_dir= to "
+            "load_assemblies()."
+        )
+
+    missing = [
+        str(search_dir / f"{name}.dll")
+        for name in _REQUIRED_DLLS
+        if not (search_dir / f"{name}.dll").is_file()
+    ]
+    if missing:
+        raise AssemblyLoadError(
+            "The following required DLLs were not found:\n" + "\n".join(missing)
+        )
+
     # pythonnet 3.x needs the runtime selected before `import clr`.
     # The DLLs are built for .NET Core / .NET 5+, so request "coreclr".
     # This is a no-op if the runtime was already initialised.
@@ -91,38 +112,23 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
             "pythonnet is not installed.  Install it with:  pip install pythonnet"
         ) from exc
 
-    # Resolve the libs directory
-    search_dir = Path(libs_dir) if libs_dir else _find_libs_dir()
-    if search_dir is None or not search_dir.is_dir():
-        raise AssemblyLoadError(
-            "Cannot locate the RawFileReader DLL directory.  "
-            "Set the RAWFILEREADER_LIBS environment variable to the folder that "
-            "contains ThermoFisher.CommonCore.*.dll files, or pass libs_dir= to "
-            "load_assemblies()."
-        )
-
     # Add the directory to the .NET search path
-    sys.path.append(str(search_dir))
+    search_path = str(search_dir)
+    path_added = search_path not in sys.path
+    if path_added:
+        sys.path.append(search_path)
 
     # Load required assemblies by name (directory is already in sys.path).
     # Passing the name rather than the full path is the reliable pattern for
     # pythonnet 3.x with .NET Core runtimes.
-    missing = []
-    for name in _REQUIRED_DLLS:
-        dll_path = search_dir / f"{name}.dll"
-        if not dll_path.exists():
-            missing.append(str(dll_path))
-            continue
-        try:
+    try:
+        for name in _REQUIRED_DLLS:
             clr.AddReference(name)
-        except Exception as exc:
-            raise AssemblyLoadError(
-                f"Failed to load assembly '{name}': {exc}"
-            ) from exc
-
-    if missing:
+    except Exception as exc:
+        if path_added:
+            sys.path.remove(search_path)
         raise AssemblyLoadError(
-            "The following required DLLs were not found:\n" + "\n".join(missing)
-        )
+            f"Failed to load assembly '{name}': {exc}"
+        ) from exc
 
     _loaded = True

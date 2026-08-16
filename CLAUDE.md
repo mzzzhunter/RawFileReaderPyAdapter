@@ -34,7 +34,8 @@ RawFileReaderPyAdapter/
 └── requirements.txt        # pythonnet>=3.0.3
 ```
 
-There are no tests, no CI configuration, no `pyproject.toml`, and no `Makefile`.
+Tests live under `tests/` and run in GitHub Actions. There is no
+`pyproject.toml` or `Makefile`.
 
 ---
 
@@ -191,11 +192,13 @@ To override, set `RAWFILEREADER_LIBS` to the folder containing the `.dll` files.
 
 ## Testing
 
-There are currently no automated tests in this repository. When adding tests:
+The repository has automated unit tests, an optional real-file integration
+test, and a Colab-compatible integration notebook. When adding tests:
 - Use `pytest` as the test runner.
 - Place tests under a `tests/` directory.
 - Tests that require real `.raw` files or the RawFileReader DLLs should be skipped when those resources are absent (use `pytest.importorskip` or a fixture that checks `RAWFILEREADER_LIBS`).
 - The pure-Python helpers in `adapter.py` (`_apply_mass_range`, `_normalize_to_tic`, `_find_closest`, `_linear_interp`) can be tested without any DLLs.
+- Keep `tests/rawfilereader_integration.ipynb` aligned with new integration scenarios.
 
 ---
 
@@ -210,7 +213,7 @@ There are currently no automated tests in this repository. When adding tests:
 ## Key .NET Concepts (for context)
 
 - `IRawDataPlus` — the main .NET interface representing an open RAW file.
-- `Device` — a .NET enum for instrument device types (`MS`, `UV`, `PDA`, etc.). The string constants in `RawFileAdapter.DEVICE_TYPES` match these enum member names.
+- `Device` — a .NET enum for instrument device types (`MS`, `UV`, `Pda`, etc.). The string constants in `RawFileAdapter.DEVICE_TYPES` match these enum member names; user input is parsed case-insensitively.
 - `RawFileReaderAdapter.FileFactory(path)` — static factory that opens the file and returns an `IRawDataPlus`.
 - Scan numbers in RawFileReader are **1-based**.
 - Scan filters are human-readable strings like `"FTMS + p NSI Full ms [200.00-2000.00]"`.
