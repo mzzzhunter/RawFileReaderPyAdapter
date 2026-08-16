@@ -88,7 +88,7 @@ This document lists the public Python API implemented by `rawfilereader`: adapte
 - Retention times are in minutes.
 - Mass ranges are normally `(low_mz, high_mz)` tuples and are inclusive when applied in Python.
 - Most adapter methods require `open()` to have been called. Using `with RawFileAdapter(...) as rf:` opens and closes automatically.
-- `device_type` strings are parsed into Thermo `Device` enum values. Common values are `"MS"`, `"UV"`, `"PDA"`, `"Analog"`, and `"MSAnalog"`.
+- `device_type` strings are parsed case-insensitively into Thermo `Device` enum values. Valid values are `"MS"`, `"MSAnalog"`, `"Analog"`, `"UV"`, `"Pda"`, and `"Other"`.
 
 ## RawFileAdapter
 
@@ -557,6 +557,10 @@ Averages scans between two scan numbers, inclusive.
 |---|---|
 | [`AveragedScan`](#averagedscan) | Averaged m/z and intensity arrays for the range. |
 
+Raises `ValueError` for reversed bounds and `ScanNotFoundError` when either
+bound is outside the file's scan range. Native averaging failures are not
+silently replaced with partial results.
+
 #### `average_scans(scan_numbers)`
 
 Averages an arbitrary list of scan numbers.
@@ -568,6 +572,9 @@ Averages an arbitrary list of scan numbers.
 | Output | Description |
 |---|---|
 | [`AveragedScan`](#averagedscan) | Averaged m/z and intensity arrays. `first_scan` and `last_scan` reflect the min/max input scan number. |
+
+Raises `ValueError` for an empty list and `ScanNotFoundError` if any requested
+scan is outside the file's scan range.
 
 #### `get_chromatogram(trace_type="BasePeak", mass_range="", start_scan=-1, end_scan=-1)`
 
@@ -731,7 +738,7 @@ Per-device instrument metadata.
 
 | Field / property | Type | Default | Description |
 |---|---:|---:|---|
-| `device_type` | `str` | required | Device type such as `"MS"`, `"UV"`, `"PDA"`, or `"Analog"`. |
+| `device_type` | `str` | required | Device type such as `"MS"`, `"UV"`, `"Pda"`, or `"Analog"` (case-insensitive). |
 | `instance_number` | `int` | required | 1-based device instance number. |
 | `name` | `str` | required | Instrument/device name. |
 | `model` | `str` | required | Instrument model. |

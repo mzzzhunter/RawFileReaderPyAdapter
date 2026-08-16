@@ -210,7 +210,7 @@ There are currently no automated tests in this repository. When adding tests:
 ## Key .NET Concepts (for context)
 
 - `IRawDataPlus` — the main .NET interface representing an open RAW file.
-- `Device` — a .NET enum for instrument device types (`MS`, `UV`, `PDA`, etc.). The string constants in `RawFileAdapter.DEVICE_TYPES` match these enum member names.
+- `Device` — a .NET enum for instrument device types (`MS`, `UV`, `Pda`, etc.). The string constants in `RawFileAdapter.DEVICE_TYPES` match these enum member names; user input is parsed case-insensitively.
 - `RawFileReaderAdapter.FileFactory(path)` — static factory that opens the file and returns an `IRawDataPlus`.
 - Scan numbers in RawFileReader are **1-based**.
 - Scan filters are human-readable strings like `"FTMS + p NSI Full ms [200.00-2000.00]"`.
