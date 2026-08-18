@@ -591,6 +591,21 @@ Extracts a chromatogram trace.
 |---|---|
 | [`ChromatogramData`](#chromatogramdata) | Times and intensities for the requested trace. |
 
+#### `get_extracted_chromatograms(rt_range, scan_filter, mass_ranges)`
+
+Extracts one EIC per mass range using Thermo's
+`ParallelChromatogramFactory`. Results preserve the input mass-range order.
+
+| Input | Type | Default | Description |
+|---|---:|---:|---|
+| `rt_range` | `Tuple[float, float]` | required | Start and end retention times in minutes. The adjacent point outside either bound may be included. |
+| `scan_filter` | `str` | required | Thermo scan-filter expression. Use `""` to select all scans. |
+| `mass_ranges` | `Tuple[float, float]` or `Sequence[Tuple[float, float]]` | required | One m/z range or multiple ranges. |
+
+| Output | Description |
+|---|---|
+| `List[ChromatogramData]` | One EIC for each requested mass range, in input order. |
+
 #### `get_trailer_data(scan_number)`
 
 Returns trailer-extra data for one scan.

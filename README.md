@@ -494,6 +494,27 @@ partial = rf.get_chromatogram(
 )
 ```
 
+#### `get_extracted_chromatograms(rt_range, scan_filter, mass_ranges) -> List[ChromatogramData]`
+
+Extract several EICs in one native parallel batch. A single mass-range tuple
+or a list of tuples is accepted; each range produces a separate result in the
+same order. Retention times are in minutes, and Thermo's default behaviour may
+include the adjacent point outside each requested boundary.
+
+```python
+eics = rf.get_extracted_chromatograms(
+    rt_range=(2.0, 8.5),
+    scan_filter="FTMS + p ESI Full ms",
+    mass_ranges=[(500.0, 510.0), (600.0, 610.0)],
+)
+
+single_eic = rf.get_extracted_chromatograms(
+    rt_range=(2.0, 8.5),
+    scan_filter="",
+    mass_ranges=(500.0, 510.0),
+)[0]
+```
+
 ---
 
 ### Trailer Extra Data

@@ -19,9 +19,11 @@ def make_assembly_directory(tmp_path, *, omit=None):
     return tmp_path
 
 
-def install_fake_runtime(monkeypatch, add_reference):
+def install_fake_runtime(monkeypatch, add_reference, runtime_calls=None):
     pythonnet = ModuleType("pythonnet")
-    pythonnet.load = lambda runtime: None
+    pythonnet.load = lambda runtime, **kwargs: (
+        runtime_calls.append((runtime, kwargs)) if runtime_calls is not None else None
+    )
     clr = ModuleType("clr")
     clr.AddReference = add_reference
     monkeypatch.setitem(sys.modules, "pythonnet", pythonnet)
@@ -70,3 +72,16 @@ def test_successful_load_does_not_duplicate_existing_search_path(
     assert sys.path.count(str(assemblies)) == 1
     assert references == loader._REQUIRED_DLLS
     assert loader._loaded is True
+
+
+def test_load_uses_packaged_runtime_config(monkeypatch, tmp_path):
+    assemblies = make_assembly_directory(tmp_path)
+    runtime_calls = []
+    install_fake_runtime(monkeypatch, lambda _: None, runtime_calls)
+
+    loader.load_assemblies(str(assemblies))
+
+    assert runtime_calls == [
+        ("coreclr", {"runtime_config": str(loader._RUNTIME_CONFIG)})
+    ]
+    assert loader._RUNTIME_CONFIG.is_file()

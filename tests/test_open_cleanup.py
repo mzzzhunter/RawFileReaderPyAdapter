@@ -26,14 +26,22 @@ class FakeRawFile:
 def install_fake_dotnet_modules(monkeypatch, raw):
     raw_reader = ModuleType("ThermoFisher.CommonCore.RawFileReader")
     raw_reader.RawFileReaderAdapter = SimpleNamespace(FileFactory=lambda path: raw)
+    raw_reader.MsChromatogramSettingsConverter = type(
+        "MsChromatogramSettingsConverter", (), {}
+    )
 
     business = ModuleType("ThermoFisher.CommonCore.Data.Business")
     for name in (
         "Device",
         "ChromatogramTraceSettings",
+        "ChromatogramBatchGenerator",
+        "ChromatogramPointBuilderFactory",
+        "ChromatogramPointRequest",
         "MassOptions",
+        "ParallelChromatogramFactory",
         "Range",
         "Scan",
+        "ScanSelect",
         "TraceType",
         "ChromatogramSignal",
     ):
@@ -43,6 +51,12 @@ def install_fake_dotnet_modules(monkeypatch, raw):
     background.BackgroundSubtractor = type("BackgroundSubtractor", (), {})
     background.ScanAveragerPlus = type("ScanAveragerPlus", (), {})
 
+    interfaces = ModuleType("ThermoFisher.CommonCore.Data.Interfaces")
+    interfaces.IChromatogramDelivery = type("IChromatogramDelivery", (), {})
+    interfaces.IChromatogramPointRequest = type(
+        "IChromatogramPointRequest", (), {}
+    )
+
     generic = ModuleType("System.Collections.Generic")
     generic.List = type("List", (), {})
 
@@ -51,12 +65,17 @@ def install_fake_dotnet_modules(monkeypatch, raw):
     system.Array = type("Array", (), {})
     system.Enum = type("Enum", (), {})
 
+    tasks = ModuleType("System.Threading.Tasks")
+    tasks.Task = type("Task", (), {})
+
     modules = {
         "ThermoFisher.CommonCore.RawFileReader": raw_reader,
         "ThermoFisher.CommonCore.Data.Business": business,
         "ThermoFisher.CommonCore.BackgroundSubtraction": background,
+        "ThermoFisher.CommonCore.Data.Interfaces": interfaces,
         "System.Collections.Generic": generic,
         "System": system,
+        "System.Threading.Tasks": tasks,
     }
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
