@@ -16,7 +16,7 @@ Usage::
 from __future__ import annotations
 
 import os
-from typing import Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from .exceptions import (
     AssemblyLoadError,
@@ -44,6 +44,9 @@ from .models import (
     SubtractedSpectrum,
     TrailerData,
 )
+
+
+_chromatogram_delivery_type = None
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +303,15 @@ class RawFileAdapter:
         self._Array = None
         self._ChromatogramTraceSettings = None
         self._TraceType = None
+        self._ChromatogramPointBuilderFactory = None
+        self._ChromatogramPointRequest = None
+        self._ScanSelect = None
+        self._IChromatogramDelivery = None
+        self._IChromatogramPointRequest = None
+        self._ChromatogramDelivery = None
+        self._ChromatogramBatchGenerator = None
+        self._ParallelChromatogramFactory = None
+        self._Task = None
 
     # ------------------------------------------------------------------
     # Context manager
@@ -343,12 +355,21 @@ class RawFileAdapter:
         # ---- All .NET imports in one place --------------------------------
         from ThermoFisher.CommonCore.RawFileReader import RawFileReaderAdapter  # type: ignore
         from ThermoFisher.CommonCore.Data.Business import (  # type: ignore
+            ChromatogramBatchGenerator,
+            ChromatogramPointBuilderFactory,
+            ChromatogramPointRequest,
             Device,
             ChromatogramTraceSettings,
             MassOptions,
+            ParallelChromatogramFactory,
             Range as MassRange,
             Scan,
+            ScanSelect,
             TraceType,
+        )
+        from ThermoFisher.CommonCore.Data.Interfaces import (  # type: ignore
+            IChromatogramDelivery,
+            IChromatogramPointRequest,
         )
         from ThermoFisher.CommonCore.BackgroundSubtraction import (  # type: ignore
             BackgroundSubtractor,
@@ -356,6 +377,7 @@ class RawFileAdapter:
         )
         from System.Collections.Generic import List as DotNetList  # type: ignore
         from System import Int32, Array, Enum as DotNetEnum  # type: ignore
+        from System.Threading.Tasks import Task  # type: ignore
         # -------------------------------------------------------------------
 
         self._Device = Device
@@ -370,6 +392,32 @@ class RawFileAdapter:
         self._DotNetEnum = DotNetEnum
         self._ChromatogramTraceSettings = ChromatogramTraceSettings
         self._TraceType = TraceType
+        self._ChromatogramPointBuilderFactory = ChromatogramPointBuilderFactory
+        self._ChromatogramPointRequest = ChromatogramPointRequest
+        self._ScanSelect = ScanSelect
+        self._IChromatogramDelivery = IChromatogramDelivery
+        self._IChromatogramPointRequest = IChromatogramPointRequest
+        self._ChromatogramBatchGenerator = ChromatogramBatchGenerator
+        self._ParallelChromatogramFactory = ParallelChromatogramFactory
+        self._Task = Task
+
+        global _chromatogram_delivery_type
+        if _chromatogram_delivery_type is None:
+            class ChromatogramDelivery(IChromatogramDelivery):
+                __namespace__ = "RawFileReaderPyAdapter.Dynamic"
+
+                def __init__(self, request):
+                    self._request = request
+                    self.DeliveredSignal = None
+
+                def get_Request(self):
+                    return self._request
+
+                def Process(self, signal):
+                    self.DeliveredSignal = signal
+
+            _chromatogram_delivery_type = ChromatogramDelivery
+        self._ChromatogramDelivery = _chromatogram_delivery_type
 
         from ThermoFisher.CommonCore.Data.Business import ChromatogramSignal  # type: ignore
         self._ChromatogramSignal = ChromatogramSignal
@@ -886,6 +934,102 @@ class RawFileAdapter:
             times=[float(t) for t in sig.Times] if sig.Times else [],
             intensities=[float(i) for i in sig.Intensities] if sig.Intensities else [],
         )
+
+    def get_extracted_chromatograms(
+        self,
+        rt_range: Tuple[float, float],
+        scan_filter: str,
+        mass_ranges: Union[
+            Tuple[float, float],
+            Sequence[Tuple[float, float]],
+        ],
+    ) -> List[ChromatogramData]:
+        """Extract one EIC per mass range using Thermo's parallel factory.
+
+        Parameters
+        ----------
+        rt_range : tuple[float, float]
+            Start and end retention times in minutes. Thermo's default range
+            behaviour includes the adjacent point outside each boundary.
+        scan_filter : str
+            Thermo scan-filter expression. An empty string selects all scans.
+        mass_ranges : tuple[float, float] or sequence of tuple[float, float]
+            One m/z range or several. Each range produces a separate result,
+            returned in the same order as the input ranges.
+        """
+        self._check_open()
+
+        rt_start, rt_end = (float(value) for value in rt_range)
+        if rt_start > rt_end:
+            raise ValueError("rt_range start must not exceed its end")
+
+        if (
+            isinstance(mass_ranges, tuple)
+            and len(mass_ranges) == 2
+            and all(isinstance(value, (int, float)) for value in mass_ranges)
+        ):
+            normalized_ranges = [mass_ranges]
+        else:
+            normalized_ranges = list(mass_ranges)
+
+        if not normalized_ranges:
+            raise ValueError("mass_ranges must contain at least one range")
+
+        parsed_ranges: List[Tuple[float, float]] = []
+        for mass_range in normalized_ranges:
+            if len(mass_range) != 2:
+                raise ValueError("each mass range must contain low and high m/z")
+            low, high = (float(value) for value in mass_range)
+            if low > high:
+                raise ValueError("mass range low m/z must not exceed high m/z")
+            parsed_ranges.append((low, high))
+
+        time_range = self._MassRange(rt_start, rt_end)
+        if scan_filter:
+            parsed_filter = self._raw_file.GetFilterFromString(scan_filter)
+            selector = self._ScanSelect.SelectByFilter(parsed_filter)
+        else:
+            selector = self._ScanSelect.SelectAll()
+
+        deliveries = []
+        for low, high in parsed_ranges:
+            point_request = self._ChromatogramPointRequest.MassRangeRequest(
+                low, high
+            )
+            point_requests = self._Array[self._IChromatogramPointRequest](
+                [point_request]
+            )
+            request = self._ChromatogramPointBuilderFactory.CreatePointBuilder(
+                time_range, selector, point_requests
+            )
+            deliveries.append(self._ChromatogramDelivery(request))
+
+        generator = self._ChromatogramBatchGenerator()
+        self._ParallelChromatogramFactory.FromRawData(generator, self._raw_file)
+        delivery_array = self._Array[self._IChromatogramDelivery](deliveries)
+        tasks = generator.GenerateChromatograms(delivery_array)
+        self._Task.WaitAll(tasks)
+
+        results: List[ChromatogramData] = []
+        for (low, high), delivery in zip(parsed_ranges, deliveries):
+            signal = delivery.DeliveredSignal
+            results.append(
+                ChromatogramData(
+                    trace_type="EIC",
+                    mass_range=f"{low}-{high}",
+                    times=(
+                        [float(value) for value in signal.Times]
+                        if signal is not None and signal.Times
+                        else []
+                    ),
+                    intensities=(
+                        [float(value) for value in signal.Intensities]
+                        if signal is not None and signal.Intensities
+                        else []
+                    ),
+                )
+            )
+        return results
 
     # ------------------------------------------------------------------
     # Trailer / status logs

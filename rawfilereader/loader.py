@@ -29,6 +29,8 @@ _REQUIRED_DLLS = [
     "ThermoFisher.CommonCore.BackgroundSubtraction",
 ]
 
+_RUNTIME_CONFIG = Path(__file__).with_name("runtimeconfig.json")
+
 _loaded = False  # module-level flag to avoid loading twice
 
 
@@ -101,7 +103,7 @@ def load_assemblies(libs_dir: Optional[str] = None) -> None:
     # This is a no-op if the runtime was already initialised.
     try:
         from pythonnet import load as _load_runtime
-        _load_runtime("coreclr")
+        _load_runtime("coreclr", runtime_config=str(_RUNTIME_CONFIG))
     except Exception:
         pass  # pythonnet < 3.0, or runtime already set
 
